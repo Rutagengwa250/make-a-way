@@ -1,0 +1,1763 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="libs/jspdf.umd.min.js"></script>
+    <script src="libs/jspdf.plugin.autotable.min.js"></script>
+    <script src="libs/html2canvas.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Make A Way</title>
+    <link rel="icon" href="logo.png" type="image/png">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+        /* Form overlay styles */
+        .form-overlay {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+        }
+        
+        .form-container {
+            background-color: white;
+            margin: 10% auto;
+            padding: 30px;
+            width: 400px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        .form-title {
+            color: #2575fc;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            border-color: #2575fc;
+            outline: none;
+        }
+        
+        .form-buttons {
+            text-align: right;
+            margin-top: 30px;
+        }
+        
+        .form-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        
+        .form-cancel {
+            background: #f8f9fa;
+        }
+        
+        .form-submit {
+            background: #2575fc;
+            color: white;
+        }
+        
+        /* Modal styles for transaction details */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 2001;
+        }
+        
+        .modal-content {
+            background-color: white;
+            padding: 25px;
+            width: 500px;
+            max-width: 90%;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            position: relative;
+            z-index: 2002;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .modal-close {
+            position: absolute;
+            right: 15px;
+            top: 10px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            background: none;
+            border: none;
+        }
+        
+        .modal-close:hover {
+            color: #ff4757;
+        }
+        
+        /* Background Letters */
+        #loginScreen {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .bg-letters {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 0;
+            opacity: 0.15;
+        }
+
+        .letter {
+            font-size: 350px;
+            font-weight: 900;
+            color: #2575fc;
+            text-shadow: 0 0 40px rgba(37, 117, 252, 0.3);
+            margin: 0 -40px;
+            opacity: 0.7;
+            animation: floatLetter 4s infinite ease-in-out;
+        }
+
+        .letter.M { animation-delay: 0s; }
+        .letter.A { animation-delay: 0.4s; }
+        .letter.W { animation-delay: 0.8s; }
+
+        @keyframes floatLetter {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            33% { transform: translateY(-15px) rotate(-2deg); }
+            66% { transform: translateY(10px) rotate(2deg); }
+        }
+
+        /* App Background Letters */
+        .bg-letters-app {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: clamp(22px, 6vw, 86px);
+            z-index: 0;
+            opacity: 0.26;
+            pointer-events: none;
+        }
+
+        .bg-letters-app .letter {
+            font-size: clamp(120px, 23vw, 336px);
+            font-weight: 900;
+            color: #1f4fa6;
+            text-shadow: 0 0 36px rgba(20, 69, 151, 0.22);
+            margin: 0;
+            opacity: 0.34;
+            animation: floatAppLetters 8s infinite ease-in-out;
+        }
+
+        #app {
+            position: relative;
+        }
+
+        #app > .top-bar,
+        #app > .nav-buttons,
+        #app > .page-container,
+        #app > .footer {
+            position: relative;
+            z-index: 1;
+        }
+
+        .bg-letters-app .letter.M { animation-delay: 0s; }
+        .bg-letters-app .letter.A { animation-delay: 1.5s; }
+        .bg-letters-app .letter.W { animation-delay: 3s; }
+
+        @keyframes floatAppLetters {
+            0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+            25% { transform: translateY(-10px) rotate(-0.5deg) scale(1.01); }
+            50% { transform: translateY(6px) rotate(0.5deg) scale(0.99); }
+            75% { transform: translateY(-4px) rotate(-0.3deg) scale(1.005); }
+        }
+
+        /* Make sure login screen letters are different */
+        #loginScreen .bg-letters {
+            opacity: 0.15;
+            z-index: 0;
+        }
+
+        #loginScreen .bg-letters .letter {
+            font-size: 350px;
+            opacity: 0.7;
+        }
+
+        /* Make app content see-through */
+        .page-container {
+            background: transparent;
+        }
+
+        .page {
+            background: transparent;
+        }
+
+        /* Make containers semi-transparent */
+        .dashboard-card,
+        .sale-left,
+        .sale-right,
+        .customer-controls,
+        .customer-list,
+        .deposit-list,
+        .report-output,
+        .stat-card,
+        .login-card,
+        .form-container {
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(6px);
+        }
+
+        /* Top bar with transparency */
+        .top-bar {
+            background: linear-gradient(135deg, rgba(37, 117, 252, 0.92) 0%, rgba(106, 17, 203, 0.92) 100%);
+            backdrop-filter: blur(8px);
+        }
+
+        /* Navigation buttons */
+        .nav-buttons {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(4px);
+        }
+
+        /* Footer */
+        .footer {
+            background: rgba(248, 249, 250, 0.88);
+            backdrop-filter: blur(4px);
+        }
+
+        /* Ensure other elements stay on top */
+        .login-logo, .login-card {
+            position: relative;
+            z-index: 1;
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Top-bar logo styling */
+        .top-bar-logo {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-right: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        /* MAW loading overlay */
+        #welcomeOverlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 12000;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 12% 14%, rgba(68, 186, 255, 0.34) 0%, rgba(68, 186, 255, 0) 40%),
+                radial-gradient(circle at 85% 18%, rgba(0, 201, 211, 0.24) 0%, rgba(0, 201, 211, 0) 42%),
+                linear-gradient(145deg, #f4fbff 0%, #dcedff 52%, #cae5ff 100%);
+        }
+
+        #welcomeOverlay::before {
+            content: '';
+            position: absolute;
+            inset: -30%;
+            pointer-events: none;
+            opacity: 0.35;
+            background-image:
+                repeating-linear-gradient(
+                    var(--maw-loader-angle, 132deg),
+                    rgba(14, 122, 196, 0.08) 0px,
+                    rgba(14, 122, 196, 0.08) 2px,
+                    rgba(255, 255, 255, 0) 2px,
+                    rgba(255, 255, 255, 0) 26px
+                );
+            animation: mawLoaderDrift 26s linear infinite;
+        }
+
+        #welcomeOverlay::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 50% 2%, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0) 36%),
+                radial-gradient(circle at 14% 92%, rgba(255, 255, 255, 0.46) 0%, rgba(255, 255, 255, 0) 34%);
+        }
+
+        #welcomeOverlay.show {
+            display: flex;
+        }
+
+        .maw-loader-shell {
+            position: relative;
+            z-index: 2;
+            width: min(520px, 92vw);
+            padding: clamp(26px, 4vw, 42px) clamp(20px, 4vw, 40px);
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.88);
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.86), rgba(241, 250, 255, 0.72));
+            box-shadow: 0 26px 64px rgba(6, 62, 108, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.86);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .maw-loader-shell::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #00c3d2 0%, #1d8fff 40%, #62d7ff 100%);
+        }
+
+        .maw-loader-word {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: clamp(10px, 2vw, 22px);
+            margin-bottom: 12px;
+        }
+
+        .maw-loader-letter {
+            position: relative;
+            font-family: 'Sora', 'Space Grotesk', sans-serif;
+            font-size: clamp(72px, 14vw, 142px);
+            line-height: 1;
+            font-weight: 800;
+            color: transparent;
+            letter-spacing: 0.02em;
+            -webkit-text-stroke: 2px rgba(79, 156, 208, 0.58);
+            text-shadow: 0 8px 18px rgba(9, 66, 112, 0.14);
+        }
+
+        .maw-loader-letter::after {
+            content: attr(data-letter);
+            position: absolute;
+            inset: 0;
+            color: #2e9be7;
+            clip-path: inset(100% 0 0 0);
+            text-shadow: 0 12px 32px rgba(27, 130, 207, 0.35);
+        }
+
+        #welcomeOverlay.show .maw-loader-letter::after {
+            animation: mawLetterFill 1.1s cubic-bezier(0.26, 0.89, 0.34, 1) forwards;
+            animation-delay: var(--fill-delay, 0s);
+        }
+
+        #welcomeOverlay.show .maw-loader-letter {
+            animation: mawLetterFloat 1.2s ease-in-out forwards;
+            animation-delay: calc(var(--fill-delay, 0s) + 0.12s);
+        }
+
+        .maw-loader-subtitle {
+            margin: 0;
+            font-family: 'Space Grotesk', 'Sora', sans-serif;
+            font-size: 0.86rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: #2d638d;
+            opacity: 0.9;
+        }
+
+        .maw-loader-bar {
+            margin: 18px auto 0;
+            width: min(320px, 100%);
+            height: 9px;
+            border-radius: 999px;
+            background: rgba(14, 102, 165, 0.14);
+            overflow: hidden;
+            border: 1px solid rgba(17, 106, 170, 0.18);
+        }
+
+        .maw-loader-track {
+            display: block;
+            height: 100%;
+            width: 100%;
+            border-radius: inherit;
+            transform: scaleX(0);
+            transform-origin: left center;
+            background: linear-gradient(90deg, #00b9d2 0%, #1b92ff 42%, #66ddff 100%);
+            box-shadow: 0 0 20px rgba(32, 148, 232, 0.38);
+        }
+
+        #welcomeOverlay.show .maw-loader-track {
+            animation: mawTrackFill 1.45s cubic-bezier(0.24, 0.88, 0.31, 1) forwards;
+        }
+
+        @keyframes mawLoaderDrift {
+            from { transform: translate3d(0, 0, 0); }
+            to { transform: translate3d(120px, 70px, 0); }
+        }
+
+        @keyframes mawLetterFill {
+            from { clip-path: inset(100% 0 0 0); }
+            to { clip-path: inset(0 0 0 0); }
+        }
+
+        @keyframes mawLetterFloat {
+            0% { transform: translateY(8px) scale(0.97); opacity: 0.7; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        @keyframes mawTrackFill {
+            from { transform: scaleX(0); }
+            to { transform: scaleX(1); }
+        }
+
+        body.dark-mode #welcomeOverlay,
+        #welcomeOverlay.loader-dark {
+            background:
+                radial-gradient(circle at 13% 16%, rgba(45, 138, 217, 0.34) 0%, rgba(45, 138, 217, 0) 42%),
+                radial-gradient(circle at 84% 12%, rgba(0, 178, 188, 0.28) 0%, rgba(0, 178, 188, 0) 42%),
+                linear-gradient(145deg, #061324 0%, #0a1a2f 52%, #102947 100%);
+        }
+
+        body.dark-mode #welcomeOverlay::before,
+        #welcomeOverlay.loader-dark::before {
+            opacity: 0.24;
+        }
+
+        body.dark-mode .maw-loader-shell,
+        #welcomeOverlay.loader-dark .maw-loader-shell {
+            background: linear-gradient(165deg, rgba(13, 28, 49, 0.88), rgba(8, 20, 37, 0.84));
+            border-color: rgba(136, 200, 255, 0.3);
+            box-shadow: 0 30px 70px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+
+        body.dark-mode .maw-loader-letter,
+        #welcomeOverlay.loader-dark .maw-loader-letter {
+            -webkit-text-stroke: 2px rgba(146, 205, 255, 0.5);
+            text-shadow: 0 10px 24px rgba(9, 25, 40, 0.45);
+        }
+
+        body.dark-mode .maw-loader-letter::after,
+        #welcomeOverlay.loader-dark .maw-loader-letter::after {
+            color: #9fd8ff;
+            text-shadow: 0 14px 34px rgba(90, 174, 244, 0.42);
+        }
+
+        body.dark-mode .maw-loader-subtitle,
+        #welcomeOverlay.loader-dark .maw-loader-subtitle {
+            color: #9cc3e1;
+        }
+
+        body.dark-mode .maw-loader-bar,
+        #welcomeOverlay.loader-dark .maw-loader-bar {
+            background: rgba(108, 168, 225, 0.15);
+            border-color: rgba(119, 182, 240, 0.22);
+        }
+
+        @media (max-width: 768px) {
+            .letter {
+                font-size: 220px;
+                margin: 0 -35px;
+            }
+            
+            .bg-letters-app .letter {
+                font-size: 160px;
+                margin: 0;
+            }
+            
+            .form-container {
+                width: 90%;
+                margin: 5% auto;
+            }
+        }
+        
+        /* Customer details styling */
+        .customer-details {
+            margin-top: 5px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .customer-detail-item {
+            margin-bottom: 3px;
+        }
+        
+        .customer-detail-item strong {
+            color: #555;
+        }
+
+        /* Sales History Table Styling */
+        #salesHistoryTable {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        #salesHistoryTable th {
+            background: linear-gradient(135deg, #2575fc 0%, #6a11cb 100%);
+            color: white;
+            padding: 16px 15px;
+            text-align: left;
+        }
+
+        #salesHistoryTable td {
+            padding: 15px;
+            border-bottom: 1px solid #e1e5e9;
+        }
+
+        #salesHistoryTable tr:hover {
+            background-color: #f5f9ff;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 14px 18px;
+            border: 2px solid #e1e5e9;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .search-input:focus {
+            border-color: #2575fc;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(37, 117, 252, 0.1);
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .filter-btn {
+            padding: 10px 20px;
+            border: 1px solid #e1e5e9;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .filter-btn.active {
+            background: #2575fc;
+            color: white;
+            border-color: #2575fc;
+        }
+
+        .filter-btn:hover {
+            background: #e9ecef;
+        }
+
+        .filter-btn.active:hover {
+            background: #1a5fc8;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .add-btn {
+            padding: 12px 24px;
+            background: #2ed573;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .add-btn:hover {
+            background: #26b864;
+            transform: translateY(-2px);
+        }
+
+        /* ================= ARTISTIC LOGIN REDESIGN ================= */
+        #loginScreen {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: clamp(18px, 3vw, 34px);
+            font-family: 'Space Grotesk', 'Sora', 'Trebuchet MS', sans-serif;
+            background:
+                radial-gradient(circle at 12% 16%, rgba(60, 184, 255, 0.36) 0%, rgba(60, 184, 255, 0) 40%),
+                radial-gradient(circle at 85% 12%, rgba(0, 203, 205, 0.25) 0%, rgba(0, 203, 205, 0) 36%),
+                radial-gradient(circle at 78% 88%, rgba(52, 142, 255, 0.22) 0%, rgba(52, 142, 255, 0) 45%),
+                linear-gradient(140deg, #f7fcff 0%, #dcf1ff 50%, #c9e8ff 100%);
+        }
+
+        #loginScreen::before {
+            content: '';
+            position: absolute;
+            inset: -30%;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.36;
+            background-image:
+                repeating-linear-gradient(
+                    145deg,
+                    rgba(9, 125, 196, 0.08) 0px,
+                    rgba(9, 125, 196, 0.08) 2px,
+                    rgba(255, 255, 255, 0) 2px,
+                    rgba(255, 255, 255, 0) 24px
+                );
+            animation: mawLoginDrift 30s linear infinite;
+        }
+
+        #loginScreen::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background:
+                radial-gradient(circle at 50% 5%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 38%),
+                radial-gradient(circle at 18% 90%, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 36%);
+        }
+
+        #loginScreen .bg-letters {
+            z-index: 1;
+            opacity: 0.55;
+            filter: saturate(120%);
+            pointer-events: none;
+        }
+
+        #loginScreen .bg-letters .letter {
+            font-size: clamp(190px, 24vw, 360px);
+            color: rgba(23, 108, 181, 0.14);
+            text-shadow: 0 0 32px rgba(35, 137, 232, 0.2);
+            margin: 0 -24px;
+            letter-spacing: -0.04em;
+        }
+
+        #loginScreen .login-logo {
+            position: relative;
+            z-index: 3;
+            margin-bottom: 18px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            animation: none;
+        }
+
+        #loginScreen .login-logo::before {
+            content: none;
+        }
+
+        #loginScreen .login-logo img {
+            width: 110px;
+            height: 110px;
+            border-radius: 16px;
+            display: block;
+            border: none;
+            background: transparent;
+            padding: 0;
+            margin: 0;
+            box-shadow: none;
+            object-fit: cover;
+            filter: saturate(1.08) contrast(1.05);
+        }
+
+        #loginScreen .login-card {
+            position: relative;
+            z-index: 3;
+            width: min(520px, 94vw);
+            padding: clamp(24px, 3.4vw, 40px);
+            border-radius: 30px;
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.88), rgba(247, 252, 255, 0.72));
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 26px 70px rgba(7, 63, 109, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(14px) saturate(130%);
+            -webkit-backdrop-filter: blur(14px) saturate(130%);
+            overflow: hidden;
+            animation: mawCardRise 0.75s cubic-bezier(0.2, 0.9, 0.2, 1);
+        }
+
+        #loginScreen .login-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(90deg, #00c1d1 0%, #1793ff 45%, #57d6ff 100%);
+        }
+
+        #loginScreen .login-card::after {
+            content: '';
+            position: absolute;
+            width: 220px;
+            height: 220px;
+            right: -85px;
+            top: -95px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(83, 175, 255, 0.25) 0%, rgba(83, 175, 255, 0) 70%);
+            pointer-events: none;
+        }
+
+        #loginScreen .login-card h2 {
+            margin: 0 0 18px;
+            font-family: 'Sora', 'Space Grotesk', sans-serif;
+            font-size: clamp(1.55rem, 2.2vw, 2.15rem);
+            letter-spacing: 0.06em;
+            color: #083b69;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        #loginScreen .auth-tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            padding: 5px;
+            border-radius: 14px;
+            background: rgba(10, 85, 142, 0.09);
+            margin-bottom: 18px;
+        }
+
+        #loginScreen .auth-tab-btn {
+            border: none;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            font-size: 0.95rem;
+            color: #2a608d;
+            background: transparent;
+            transition: all 0.25s ease;
+        }
+
+        #loginScreen .auth-tab-btn:hover {
+            background: rgba(13, 117, 200, 0.12);
+            transform: translateY(-1px);
+        }
+
+        #loginScreen .auth-tab-btn.active {
+            color: #fff;
+            background: linear-gradient(135deg, #0d7ce3 0%, #00b3c1 100%);
+            box-shadow: 0 10px 22px rgba(15, 125, 212, 0.33);
+        }
+
+        #loginScreen .input-group {
+            margin-bottom: 14px;
+        }
+
+        #loginScreen .input-group label {
+            display: block;
+            font-size: 0.74rem;
+            font-weight: 700;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            color: #2a5f88;
+            margin-bottom: 6px;
+        }
+
+        #loginScreen .input-group input {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 13px;
+            border: 1.6px solid rgba(17, 115, 183, 0.23);
+            background: rgba(255, 255, 255, 0.82);
+            color: #123b5f;
+            font-size: 0.95rem;
+            font-family: 'Space Grotesk', 'Sora', sans-serif;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
+        }
+
+        #loginScreen .input-group input::placeholder {
+            color: #80a7c6;
+        }
+
+        #loginScreen .input-group input:focus {
+            outline: none;
+            border-color: #1297dd;
+            box-shadow: 0 0 0 4px rgba(18, 151, 221, 0.16);
+            background: #fff;
+            transform: translateY(-1px);
+        }
+
+        #loginScreen .verification-inline {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+        }
+
+        #loginScreen .verification-inline input {
+            flex: 1;
+            min-width: 0;
+        }
+
+        #loginScreen .code-btn {
+            border: none;
+            border-radius: 12px;
+            padding: 0 14px;
+            min-width: 118px;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(135deg, #0882da, #00a8b8);
+            box-shadow: 0 10px 20px rgba(8, 130, 218, 0.28);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+        }
+
+        #loginScreen .code-btn:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.04);
+        }
+
+        #loginScreen .login-button {
+            width: 100%;
+            border: none;
+            border-radius: 14px;
+            margin-top: 8px;
+            padding: 14px 16px;
+            font-size: 0.95rem;
+            font-weight: 800;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            font-family: 'Sora', 'Space Grotesk', sans-serif;
+            color: #fff;
+            background: linear-gradient(135deg, #0a79de 0%, #00b8c5 100%);
+            box-shadow: 0 16px 28px rgba(10, 121, 222, 0.35);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+        }
+
+        #loginScreen .login-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 34px rgba(10, 121, 222, 0.4);
+            filter: saturate(1.06);
+        }
+
+        #loginScreen .login-button:active {
+            transform: translateY(-1px);
+        }
+
+        #loginScreen .signup-button {
+            background: linear-gradient(135deg, #0c8fe4 0%, #02c89f 100%);
+        }
+
+        #loginScreen .auth-link-btn {
+            width: 100%;
+            margin-top: 10px;
+            padding: 11px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(10, 128, 198, 0.25);
+            background: rgba(255, 255, 255, 0.65);
+            color: #166092;
+            font-weight: 700;
+            font-size: 0.86rem;
+            transition: all 0.2s ease;
+        }
+
+        #loginScreen .auth-link-btn:hover {
+            background: rgba(255, 255, 255, 0.88);
+            border-color: rgba(10, 128, 198, 0.45);
+            color: #0d4f7d;
+            transform: translateY(-1px);
+        }
+
+        #loginScreen .forgot-panel {
+            margin-top: 14px;
+            padding: 15px;
+            border-radius: 16px;
+            background: linear-gradient(160deg, rgba(229, 247, 255, 0.85), rgba(247, 253, 255, 0.76));
+            border: 1px solid rgba(24, 140, 209, 0.23);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+        }
+
+        #loginScreen .forgot-panel h3 {
+            margin: 0 0 10px;
+            font-family: 'Sora', 'Space Grotesk', sans-serif;
+            color: #0f5e8f;
+            letter-spacing: 0.04em;
+            font-size: 1rem;
+        }
+
+        #loginScreen #authHint {
+            margin-top: 14px;
+            text-align: center;
+            color: #477196;
+            font-size: 0.86rem;
+            line-height: 1.5;
+        }
+
+        @keyframes mawLoginDrift {
+            from { transform: translate3d(0, 0, 0); }
+            to { transform: translate3d(120px, 80px, 0); }
+        }
+
+        @keyframes mawCardRise {
+            from {
+                opacity: 0;
+                transform: translateY(18px) scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        body.dark-mode #loginScreen {
+            background:
+                radial-gradient(circle at 13% 18%, rgba(37, 130, 214, 0.34) 0%, rgba(37, 130, 214, 0) 42%),
+                radial-gradient(circle at 88% 12%, rgba(0, 170, 180, 0.3) 0%, rgba(0, 170, 180, 0) 38%),
+                radial-gradient(circle at 75% 87%, rgba(88, 158, 255, 0.22) 0%, rgba(88, 158, 255, 0) 44%),
+                linear-gradient(140deg, #061324 0%, #0b1d34 54%, #132d49 100%);
+        }
+
+        body.dark-mode #loginScreen::before {
+            opacity: 0.24;
+        }
+
+        body.dark-mode #loginScreen .bg-letters {
+            opacity: 0.7;
+        }
+
+        body.dark-mode #loginScreen .bg-letters .letter {
+            color: rgba(188, 229, 255, 0.28);
+            text-shadow: 0 0 56px rgba(147, 210, 255, 0.38), 0 0 96px rgba(55, 143, 255, 0.24);
+        }
+
+        body.dark-mode #loginScreen .login-logo {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+        }
+
+        body.dark-mode #loginScreen .login-logo::before {
+            content: none;
+        }
+
+        body.dark-mode #loginScreen .login-card {
+            background: linear-gradient(165deg, rgba(14, 27, 47, 0.86), rgba(8, 19, 36, 0.82));
+            border: 1px solid rgba(124, 193, 255, 0.28);
+            box-shadow: 0 30px 72px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+
+        body.dark-mode #loginScreen .login-card h2 {
+            color: #d4ecff;
+            text-shadow: 0 10px 28px rgba(0, 188, 255, 0.25);
+        }
+
+        body.dark-mode #loginScreen .auth-tabs {
+            background: rgba(130, 194, 255, 0.1);
+        }
+
+        body.dark-mode #loginScreen .auth-tab-btn {
+            color: #9ac9ec;
+        }
+
+        body.dark-mode #loginScreen .auth-tab-btn:hover {
+            background: rgba(146, 202, 255, 0.12);
+        }
+
+        body.dark-mode #loginScreen .auth-tab-btn.active {
+            background: linear-gradient(135deg, #1695ff, #00b7c8);
+            color: #ffffff;
+        }
+
+        body.dark-mode #loginScreen .input-group label {
+            color: #9fcbef;
+        }
+
+        body.dark-mode #loginScreen .input-group input {
+            background: rgba(6, 20, 37, 0.74);
+            border-color: rgba(122, 187, 244, 0.34);
+            color: #def3ff;
+        }
+
+        body.dark-mode #loginScreen .input-group input::placeholder {
+            color: #7ea6c7;
+        }
+
+        body.dark-mode #loginScreen .auth-link-btn {
+            background: rgba(9, 25, 44, 0.64);
+            border-color: rgba(132, 196, 245, 0.26);
+            color: #add7f8;
+        }
+
+        body.dark-mode #loginScreen .forgot-panel {
+            background: linear-gradient(160deg, rgba(10, 30, 50, 0.78), rgba(5, 19, 35, 0.74));
+            border-color: rgba(133, 198, 255, 0.25);
+        }
+
+        body.dark-mode #loginScreen .forgot-panel h3,
+        body.dark-mode #loginScreen #authHint {
+            color: #98bad8;
+        }
+
+        @media (max-width: 768px) {
+            #loginScreen {
+                padding: 16px 12px 26px;
+            }
+
+            #loginScreen .bg-letters .letter {
+                font-size: clamp(150px, 38vw, 230px);
+                margin: 0 -14px;
+            }
+
+            #loginScreen .login-logo {
+                margin-bottom: 12px;
+                padding: 0;
+            }
+
+            #loginScreen .login-logo img {
+                width: 84px;
+                height: 84px;
+                border-radius: 14px;
+            }
+
+            #loginScreen .login-card {
+                width: min(440px, 94vw);
+                border-radius: 24px;
+                padding: 22px 16px 18px;
+            }
+
+            #loginScreen .login-card h2 {
+                font-size: 1.35rem;
+                margin-bottom: 14px;
+            }
+
+            #loginScreen .verification-inline {
+                flex-direction: column;
+            }
+
+            #loginScreen .code-btn {
+                width: 100%;
+                min-height: 44px;
+            }
+
+            #loginScreen .login-button,
+            #loginScreen .auth-link-btn {
+                padding: 12px 14px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #loginScreen::before,
+            #loginScreen .login-card,
+            #loginScreen .login-logo {
+                animation: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- MAW Loading Overlay -->
+<div id="welcomeOverlay" aria-hidden="true">
+    <div class="maw-loader-shell">
+        <div class="maw-loader-word" aria-label="MAW">
+            <span class="maw-loader-letter" data-letter="M" style="--fill-delay: 0s;">M</span>
+            <span class="maw-loader-letter" data-letter="A" style="--fill-delay: .16s;">A</span>
+            <span class="maw-loader-letter" data-letter="W" style="--fill-delay: .32s;">W</span>
+        </div>
+        <p class="maw-loader-subtitle">Loading Workspace</p>
+        <div class="maw-loader-bar">
+            <span class="maw-loader-track"></span>
+        </div>
+    </div>
+</div>
+
+<!-- Login Screen -->
+<div id="loginScreen">
+    <!-- Background Letters -->
+    <div class="bg-letters">
+        <div class="letter M">M</div>
+        <div class="letter A">A</div>
+        <div class="letter W">W</div>
+    </div>
+    
+    <div class="login-logo">
+        <img src="logo.png" alt="Make A Way Logo">
+    </div>
+
+    <div class="login-card">
+        <h2>MAKE A WAY</h2>
+        <div class="auth-tabs">
+            <button id="authLoginTab" class="auth-tab-btn active" type="button">Login</button>
+            <button id="authSignupTab" class="auth-tab-btn" type="button">Sign Up</button>
+        </div>
+
+        <div class="input-group" id="signupNameGroup" style="display: none;">
+            <label for="signupName">Full Name</label>
+            <input type="text" id="signupName" placeholder="Enter your full name" autocomplete="off">
+        </div>
+
+        <div class="input-group" id="signupEmailGroup" style="display: none;">
+            <label for="signupEmail">Email Address</label>
+            <input type="email" id="signupEmail" placeholder="Enter your email address" autocomplete="off">
+        </div>
+
+        <div class="input-group">
+            <label for="phone">Phone Number or Email</label>
+            <input type="text" id="phone" placeholder="Enter your phone or email" autocomplete="off">
+        </div>
+        
+        <div class="input-group">
+            <label for="pin">5-digit PIN</label>
+            <input type="password" id="pin" maxlength="5" placeholder="Enter pin" autocomplete="off">
+        </div>
+
+        <div class="input-group" id="confirmPinGroup" style="display: none;">
+            <label for="confirmPin">Confirm PIN</label>
+            <input type="password" id="confirmPin" maxlength="5" placeholder="Confirm your PIN" autocomplete="off">
+        </div>
+
+        <div class="input-group" id="signupVerificationGroup" style="display: none;">
+            <label for="signupVerificationCode">Verification Code</label>
+            <div class="verification-inline">
+                <input type="text" id="signupVerificationCode" maxlength="6" placeholder="Enter 6-digit code" autocomplete="off">
+                <button id="sendSignupCodeBtn" class="code-btn" type="button">Send Code</button>
+            </div>
+        </div>
+        
+        <button id="loginBtn" class="login-button">LOGIN</button>
+        <button id="signupBtn" class="login-button signup-button" style="display: none;">CREATE ACCOUNT</button>
+        <button id="forgotPinBtn" class="auth-link-btn" type="button">Forgot PIN?</button>
+
+        <div id="forgotPinPanel" class="forgot-panel" style="display: none;">
+            <h3 id="forgotPinTitle">Reset PIN</h3>
+            <div class="input-group">
+                <label for="resetPhone">Phone Number</label>
+                <input type="tel" id="resetPhone" placeholder="Enter your phone number" autocomplete="off">
+            </div>
+            <div class="input-group">
+                <label for="resetEmail">Email Address</label>
+                <input type="email" id="resetEmail" placeholder="Enter your email address" autocomplete="off">
+            </div>
+            <div class="input-group">
+                <label for="resetCode">Verification Code</label>
+                <div class="verification-inline">
+                    <input type="text" id="resetCode" maxlength="6" placeholder="Enter 6-digit code" autocomplete="off">
+                    <button id="sendResetCodeBtn" class="code-btn" type="button">Send Code</button>
+                </div>
+            </div>
+            <div class="input-group">
+                <label for="resetNewPin">New 5-digit PIN</label>
+                <input type="password" id="resetNewPin" maxlength="5" placeholder="Enter new PIN" autocomplete="off">
+            </div>
+            <div class="input-group">
+                <label for="resetConfirmPin">Confirm New PIN</label>
+                <input type="password" id="resetConfirmPin" maxlength="5" placeholder="Confirm new PIN" autocomplete="off">
+            </div>
+            <button id="resetPinBtn" class="login-button">RESET PIN</button>
+            <button id="cancelResetPinBtn" class="auth-link-btn" type="button">Cancel</button>
+        </div>
+        
+        <p id="authHint" class="login-note">
+            Welcome to Make A Way!<br>
+        </p>
+    </div>
+</div>
+
+<!-- Custom Forms (hidden initially) -->
+<div id="customerFormOverlay" class="form-overlay">
+    <div class="form-container" style="max-width: 450px; margin: 5% auto; padding: 25px;">
+        <h3 class="form-title" style="font-size: 1.4rem; margin-bottom: 15px;">Add New Customer</h3>
+        
+        <div class="form-group" style="margin-bottom: 15px;">
+            <label for="customerName" style="font-size: 0.9rem; margin-bottom: 5px;">Customer Name *</label>
+            <input type="text" id="customerName" placeholder="Enter customer name" required style="padding: 10px; font-size: 14px;">
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 15px;">
+            <label for="customerPhone" style="font-size: 0.9rem; margin-bottom: 5px;">Phone Number</label>
+            <input type="tel" id="customerPhone" placeholder="Enter phone number" style="padding: 10px; font-size: 14px;">
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 15px;">
+            <label for="customerLocation" style="font-size: 0.9rem; margin-bottom: 5px;">Location/Address</label>
+            <input type="text" id="customerLocation" placeholder="Enter location or address" style="padding: 10px; font-size: 14px;">
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 15px;">
+            <label for="customerType" style="font-size: 0.9rem; margin-bottom: 5px;">Customer Type</label>
+            <select id="customerType" style="padding: 10px; font-size: 14px;">
+                <option value="regular">Regular Customer</option>
+                <option value="wholesale">Wholesale</option>
+                <option value="retail">Retail</option>
+                <option value="hotel">Hotel/Restaurant</option>
+                <option value="individual">Individual</option>
+            </select>
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 15px;">
+            <label for="customerNotes" style="font-size: 0.9rem; margin-bottom: 5px;">Additional Notes</label>
+            <textarea id="customerNotes" rows="2" placeholder="Any special notes, preferences, or identification details" style="padding: 10px; font-size: 14px; min-height: 60px;"></textarea>
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="customerDebt" style="font-size: 0.9rem; margin-bottom: 5px;">Initial Debt (RWF)</label>
+            <input type="number" id="customerDebt" placeholder="Enter initial debt amount" value="0" style="padding: 10px; font-size: 14px;">
+        </div>
+        
+        <div class="form-buttons" style="margin-top: 20px; gap: 10px;">
+            <button onclick="closeCustomerForm()" class="form-btn form-cancel" style="padding: 8px 16px; font-size: 0.9rem;">Cancel</button>
+            <button onclick="saveCustomer()" class="form-btn form-submit" style="padding: 8px 16px; font-size: 0.9rem;">Save Customer</button>
+        </div>
+    </div>
+</div>
+
+<div id="depositFormOverlay" class="form-overlay">
+    <div class="form-container">
+        <h3 class="form-title">Add Deposit (Clate)</h3>
+        <div class="form-group">
+            <label for="depositName">Customer Name *</label>
+            <input type="text" id="depositName" placeholder="Enter customer name" required>
+        </div>
+        <div class="form-group">
+            <label for="depositAmount">Deposit Amount (RWF) *</label>
+            <input type="number" id="depositAmount" placeholder="Enter amount" required>
+        </div>
+        <div class="form-group">
+            <label for="depositDescription">Description</label>
+            <input type="text" id="depositDescription" placeholder="Bottle deposit, etc." value="Bottle deposit">
+        </div>
+        <div class="form-buttons">
+            <button onclick="closeDepositForm()" class="form-btn form-cancel">Cancel</button>
+            <button onclick="saveDeposit()" class="form-btn form-submit">Save Deposit</button>
+        </div>
+    </div>
+</div>
+
+<div id="debtFormOverlay" class="form-overlay">
+    <div class="form-container">
+        <h3 class="form-title" id="debtFormTitle">Manage Debt</h3>
+        <div class="form-group">
+            <label id="debtMessage">Enter amount:</label>
+            <input type="number" id="debtAmount" placeholder="Enter amount (RWF)" required>
+        </div>
+        <div class="form-buttons">
+            <button onclick="closeDebtForm()" class="form-btn form-cancel">Cancel</button>
+            <button onclick="confirmDebt()" class="form-btn form-submit">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div id="uiConfirmOverlay" class="form-overlay">
+    <div class="form-container" style="max-width: 460px;">
+        <h3 class="form-title" id="uiConfirmTitle">Confirm Action</h3>
+        <p id="uiConfirmMessage" style="margin: 0; white-space: pre-line; line-height: 1.5;">
+            Are you sure you want to continue?
+        </p>
+        <div class="form-buttons">
+            <button id="uiConfirmCancelBtn" class="form-btn form-cancel" type="button">Cancel</button>
+            <button id="uiConfirmOkBtn" class="form-btn form-submit" type="button">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<!-- Transaction details modal (used by sales history) -->
+<div id="transactionModal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+        <button class="modal-close" aria-label="Close">x</button>
+        <div id="transactionModalBody" style="padding: 8px 0;"></div>
+    </div>
+</div>
+
+<!-- Main App (hidden initially) -->
+<div id="app" style="display: none;">
+    <!-- Background Letters for entire app -->
+    <div class="bg-letters bg-letters-app" id="appBgLetters">
+        <div class="letter M">M</div>
+        <div class="letter A">A</div>
+        <div class="letter W">W</div>
+    </div>
+    
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <img src="logo.png" alt="Logo" class="top-bar-logo">
+        <div class="logo">MAKE A WAY</div>
+        <div id="activeUserBadge" class="active-user-badge" style="display: none;"></div>
+        <button id="logoutBtn" class="logout-btn">Logout</button>
+        <button id="topSettingsBtn" class="top-settings-btn" type="button" onclick="showPage('settings')" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+    
+    <!-- Navigation -->
+    <div class="nav-buttons" role="navigation" aria-label="Main app navigation">
+        <div class="nav-group nav-group-main">
+            <button class="nav-btn active" data-page="home" onclick="showPage('home')">
+                <span class="nav-label">Home</span>
+            </button>
+            <button class="nav-btn" data-page="addSale" onclick="showPage('addSale')">
+                <span class="nav-label">Add Sale</span>
+            </button>
+            <button class="nav-btn" data-page="salesHistory" onclick="showPage('salesHistory')">
+                <span class="nav-label">Sales History</span>
+            </button>
+            <button class="nav-btn" data-page="customers" onclick="showPage('customers')">
+                <span class="nav-label">Customers</span>
+            </button>
+            <button class="nav-btn" data-page="clate" onclick="showPage('clate')">
+                <span class="nav-label">Clate/Deposit</span>
+            </button>
+            <button class="nav-btn" data-page="reports" onclick="showPage('reports')">
+                <span class="nav-label">Reports</span>
+            </button>
+        </div>
+        <div class="nav-group nav-group-meta">
+            <div id="rwClock" class="rw-clock" title="Rwanda Time (Africa/Kigali)" aria-live="polite">
+                <div class="rw-clock-head">
+                    <span id="rwClockDay" class="rw-clock-day">Monday</span>
+                    <span class="rw-clock-zone">Kigali</span>
+                </div>
+                <div id="rwClockDate" class="rw-clock-date">23 Feb 2026</div>
+                <div id="rwClockTime" class="rw-clock-time">00:00:00</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pages -->
+    <div class="page-container">
+        <!-- Home Page -->
+        <div id="home" class="page">
+            <div class="dashboard home-dashboard">
+                <div class="dashboard-card home-hero-card">
+                    <div class="home-hero-meta">
+                        <span class="home-chip">Today</span>
+                        <span class="home-chip muted">Live</span>
+                    </div>
+                    <h3>Today's Sales</h3>
+                    <h1 id="todaySales">RWF 0</h1>
+                    <p>Daily total</p>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card home-stat profit">
+                        <h4>Today's Profit</h4>
+                        <h2 id="todayProfit">RWF 0</h2>
+                    </div>
+                    <div class="stat-card home-stat debt">
+                        <h4>Customers Owing</h4>
+                        <h2 id="customersOwing">RWF 0</h2>
+                    </div>
+                    <div class="stat-card home-stat deposits">
+                        <h4>Pending Deposits</h4>
+                        <h2 id="clatesPending">RWF 0</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Sale Page -->
+        <div id="addSale" class="page" style="display: none;">
+            <div class="page-header">
+                <h2>Add Sale</h2>
+            </div>
+            
+            <div class="sale-container">
+                <div class="sale-left">
+                    <h3>Available Drinks</h3>
+                    <input type="text" id="drinkSearch" class="search-input" placeholder="Search drinks..." oninput="filterDrinks()">
+                    <div id="drinkList" class="drink-list"></div>
+                    
+                    <h3 style="margin-top: 30px;">Add New Drink</h3>
+                    <div class="add-drink-form">
+                        <input type="text" id="newDrinkName" placeholder="Drink Name">
+                        <input type="number" id="newDrinkPrice" placeholder="Price (RWF)">
+                        <input type="number" id="newDrinkProfitPerCase" placeholder="Profit/Case (RWF)" min="0">
+                        <button onclick="saveNewDrink()" class="add-btn">Save Drink</button>
+                    </div>
+                </div>
+                
+                <div class="sale-right">
+                    <h3>Current Sale</h3>
+                    
+                    <!-- Cart Items Section -->
+                    <div style="background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                        <h4 style="color: #2575fc; margin-bottom: 15px;">Sale Items</h4>
+                        <div id="cartItems" style="max-height: 250px; overflow-y: auto; border: 1px solid #e1e5e9; border-radius: 8px; background: white;">
+                            <div style="text-align: center; color: #999; padding: 30px 10px; font-size: 14px;">
+                                No items added yet
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Add Section -->
+                    <div style="background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                        <h4 style="color: #2575fc; margin-bottom: 15px;">Quick Add Drink</h4>
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label style="font-size: 14px;">Select Drink:</label>
+                            <select id="quickDrinkSelect" style="width: 100%; padding: 10px; border: 2px solid #e1e5e9; border-radius: 8px; margin-top: 5px;">
+                                <option value="">Choose a drink...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label style="font-size: 14px;">Quantity:</label>
+                            <input type="number" id="quickQuantity" placeholder="Enter quantity" value="1" min="1" style="width: 100%; padding: 10px; border: 2px solid #e1e5e9; border-radius: 8px; margin-top: 5px;">
+                        </div>
+                        
+                        <button onclick="addToCart()" style="width: 100%; padding: 10px; background: #2575fc; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 10px;">Add to Cart</button>
+                    </div>
+                    
+                    <div class="sale-type">
+                        <label>Sale Type:</label>
+                        <select id="saleType" onchange="changeSaleType(this.value)">
+                            <option value="normal">Normal Sale (Cash)</option>
+                            <option value="credit">Credit Sale</option>
+                        </select>
+                    </div>
+                    
+                    <div class="customer-select" id="customerSelectContainer" style="display: none;">
+                        <label>Select Customer:</label>
+                        <select id="customerSelect"></select>
+                    </div>
+                    
+                    <div class="total-display" style="background: linear-gradient(135deg, #2575fc 0%, #6a11cb 100%); color: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                        <p style="margin: 0 0 10px 0; font-size: 14px; opacity: 0.9;">Total Amount</p>
+                        <h2 id="saleTotal" style="color: white; margin: 0;">RWF 0</h2>
+                    </div>
+                    
+                    <div class="sale-action-row">
+                        <button onclick="confirmSale()" class="confirm-btn">Confirm Sale</button>
+                        <button onclick="clearCart()" class="clear-cart-btn">Clear Cart</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customers Page -->
+        <div id="customers" class="page" style="display: none;">
+            <div class="page-header">
+                <h2>Loyal Customers</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="openCustomerForm()" class="add-btn">+ Add Customer</button>
+                    <button onclick="exportDebtSummaryPDF()" class="add-btn" style="background: #ffa502;">Export Debt Summary</button>
+                </div>
+            </div>
+            
+            <div class="customer-controls">
+                <input type="text" class="search-input" placeholder="Search customers by name, phone, or details..." oninput="debouncedFilterCustomers(this.value)">
+                
+                <div class="filter-buttons">
+                    <button class="filter-btn active" onclick="filterCustomers('all')">All</button>
+                    <button class="filter-btn" onclick="filterCustomers('owing')">Owing</button>
+                    <button class="filter-btn" onclick="filterCustomers('cleared')">Cleared</button>
+                </div>
+            </div>
+            
+            <div id="customerList" class="customer-list"></div>
+        </div>
+
+        <!-- Clate/Deposit Page -->
+        <div id="clate" class="page" style="display: none;">
+            <div class="page-header">
+                <h2>Clate / Deposit</h2>
+                <button onclick="openDepositForm()" class="add-btn">+ Add Deposit</button>
+            </div>
+            
+            <p class="page-description">Track bottle deposits and refunds.</p>
+            
+            <div class="customer-controls" style="margin-top: 20px;">
+                <input type="text" id="depositSearch" class="search-input" placeholder="Search deposits by customer name, description, or status..." oninput="debouncedFilterDeposits(this.value)">
+                
+                <div class="filter-buttons">
+                    <button class="filter-btn active" onclick="filterDeposits('all', event)">All</button>
+                    <button class="filter-btn" onclick="filterDeposits('pending', event)">Pending</button>
+                    <button class="filter-btn" onclick="filterDeposits('returned', event)">Returned</button>
+                </div>
+            </div>
+            
+            <div id="kosiyoList" class="deposit-list"></div>
+        </div>
+
+        <!-- ==================== SALES HISTORY PAGE - FIXED AND COMPLETE ==================== -->
+        <div id="salesHistory" class="page" style="display: none;">
+            <div class="page-header">
+                <h2>Sales History</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="exportSalesHistoryPDF()" class="add-btn" style="background: #ffa502;">Export PDF</button>
+                </div>
+            </div>
+            
+            <div class="customer-controls" style="margin-top: 20px;">
+                <input type="text" id="salesSearch" class="search-input" placeholder="Search sales by drink, customer, or date..." oninput="filterSalesHistory(this.value)">
+                <div style="display: flex; gap: 10px; align-items: center; margin: 10px 0 14px; flex-wrap: wrap;">
+                    <label for="salesHistoryDate" style="font-weight: 600; color: #555;">Date:</label>
+                    <input type="date" id="salesHistoryDate" style="padding: 8px 10px; border: 1px solid #d8dee8; border-radius: 8px;" onchange="applySalesHistoryFilters()">
+                    <button class="filter-btn" type="button" onclick="goToTodaySalesHistory()">Today</button>
+                </div>
+                
+                <div class="filter-buttons">
+                    <button class="filter-btn active" onclick="filterSalesByType('all', event)">All</button>
+                    <button class="filter-btn" onclick="filterSalesByType('normal', event)">Cash</button>
+                    <button class="filter-btn" onclick="filterSalesByType('credit', event)">Credit</button>
+                </div>
+            </div>
+            
+            <div style="overflow-x: auto; margin-top: 25px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                <table id="salesHistoryTable">
+                    <thead>
+                        <tr>
+                            <th>Date & Time</th>
+                            <th>Item(s)</th>
+                            <th style="text-align: center;">Qty</th>
+                            <th style="text-align: right;">Unit Price</th>
+                            <th style="text-align: right;">Total</th>
+                            <th style="text-align: center;">Type</th>
+                            <th>Customer</th>
+                            <th style="text-align: center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="salesHistoryBody">
+                        <tr>
+                            <td colspan="8" style="padding: 60px 20px; text-align: center; color: #999;">
+                                No sales recorded yet
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <!-- ==================== END OF SALES HISTORY PAGE ==================== -->
+
+        <!-- Reports Page -->
+        <div id="reports" class="page" style="display: none;">
+            <div class="page-header">
+                <h2>Reports</h2>
+            </div>
+            
+            <div class="report-controls">
+                <button class="report-btn" onclick="showDailyReport()">Daily</button>
+                <button class="report-btn" onclick="showWeeklyReport()">Weekly</button>
+                <button class="report-btn" onclick="showMonthlyReport()">Monthly</button>
+                <button class="report-btn" onclick="showAnnualReport()">Annual</button>
+                <button class="report-btn" onclick="showFullReport()">Full Report</button>
+                <input type="date" id="dailyReportDate" class="report-btn" style="background:#fff; color:#333; border:1px solid #d8dee8;" onchange="showDailyReport(this.value)">
+                <button class="report-btn" type="button" onclick="setDailyReportToday()">Today</button>
+                <button class="report-btn" type="button" onclick="printCurrentReport()">Print</button>
+            </div>
+
+            <div class="report-range-panel">
+                <h4 class="range-panel-title">Custom Date Range Report</h4>
+                <div class="report-range-grid">
+                    <div class="range-field">
+                        <label for="rangeStartDate">Start Date</label>
+                        <input type="date" id="rangeStartDate">
+                    </div>
+                    <div class="range-field">
+                        <label for="rangeEndDate">End Date</label>
+                        <input type="date" id="rangeEndDate">
+                    </div>
+                    <div class="range-field">
+                        <label for="rangeMonth">Full Month</label>
+                        <input type="month" id="rangeMonth">
+                    </div>
+                </div>
+                <div class="report-range-actions">
+                    <button class="report-btn" type="button" onclick="setRangeToThisMonth()">This Month</button>
+                    <button class="report-btn" type="button" onclick="setRangeToSelectedMonth()">Use Selected Month</button>
+                    <button class="report-btn" type="button" onclick="showCustomRangeReport()">Load Range Report</button>
+                    <button class="report-btn" type="button" onclick="exportCustomRangePDF()">Export Range PDF</button>
+                </div>
+                <p class="range-note">Choose past or present dates only. Future dates are disabled.</p>
+            </div>
+            
+            <div id="reportOutput" class="report-output"></div>
+        </div>
+
+        <!-- Settings Page -->
+        <div id="settings" class="page" style="display: none;">
+            <div class="page-header">
+                <h2>Settings & Preferences</h2>
+            </div>
+            
+            <div class="settings-layout">
+                <div class="settings-card settings-card-primary" id="settingsBusinessCard">
+                    <h3 id="settingsBusinessTitle" class="settings-card-title">Business Settings</h3>
+                    <div class="settings-group">
+                        <label for="profitPercentage">Profit Percentage (%)</label>
+                        <div class="settings-inline-row">
+                            <input type="number" id="profitPercentage" placeholder="Enter profit %" value="30" min="0" max="100">
+                            <button onclick="saveProfitPercentage()" class="settings-btn settings-btn-primary">Save</button>
+                        </div>
+                        <div class="settings-subgroup">
+                            <label for="profitMode">Profit Calculation Mode</label>
+                            <select id="profitMode">
+                                <option value="percentage">Percentage of sale total</option>
+                                <option value="perCase">Per-drink case profit</option>
+                            </select>
+                        </div>
+                        <p id="profitInfoText" class="settings-help-text">Used to calculate profit in reports and dashboards</p>
+                        <div class="settings-subgroup" id="drinkProfitManager">
+                            <h4 id="drinkProfitManagerTitle" class="settings-mini-title">Per-Drink Profit Per Case</h4>
+                            <div id="drinkProfitList" class="drink-profit-list"></div>
+                            <button id="saveDrinkProfitBtn" onclick="saveDrinkProfitsFromSettings()" class="settings-btn settings-btn-primary settings-full-btn" style="margin-top: 10px;">Save Drink Profits</button>
+                            <p id="drinkProfitInfoText" class="settings-help-text">Set and edit profit per case for each drink.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-card settings-card-primary" id="settingsInterfaceCard">
+                    <h3 id="settingsInterfaceTitle" class="settings-card-title">Appearance, Language & Currency</h3>
+                    <div class="settings-group">
+                        <label for="themeMode">Theme Mode</label>
+                        <div class="settings-theme-row">
+                            <button onclick="setTheme('light')" id="lightThemeBtn" class="settings-btn settings-theme-btn">Light Mode</button>
+                            <button onclick="setTheme('dark')" id="darkThemeBtn" class="settings-btn settings-theme-btn dark">Dark Mode</button>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <label for="language">Select Language</label>
+                        <select id="language">
+                            <option value="en">English</option>
+                            <option value="rw">Kinyarwanda</option>
+                            <option value="fr">Francais</option>
+                        </select>
+                        <p id="languageInfoText" class="settings-help-text">Language preference for the app interface</p>
+                    </div>
+                    <div class="settings-group">
+                        <label for="currency">Currency Symbol</label>
+                        <input type="text" id="currency" placeholder="RWF" value="RWF" maxlength="5">
+                        <p id="currencyInfoText" class="settings-help-text">Default currency symbol (e.g., RWF, $, EUR)</p>
+                    </div>
+                    <button id="saveLanguageCurrencyBtn" onclick="saveCurrencyAndLanguage()" class="settings-btn settings-btn-primary settings-full-btn">Save Language & Currency</button>
+                </div>
+
+                <div class="settings-card settings-card-secondary" id="settingsSystemCard">
+                    <h3 id="settingsSystemTitle" class="settings-card-title">System Info</h3>
+                    <div class="settings-system-info">
+                        <p id="appNameRow"><strong>App Name:</strong> Make A Way</p>
+                        <p id="versionRow"><strong>Version:</strong> 2.0</p>
+                        <p id="purposeRow"><strong>Purpose:</strong> Business Tracking & Sales Management System</p>
+                        <p id="storageRow"><strong>Storage:</strong> <span id="storageStatus">Checking...</span></p>
+                        <p id="accountRow"><strong>Active Account:</strong> <span id="activeAccountName">Not logged in</span></p>
+                        <button id="startTutorialBtn" onclick="startOnboardingTutorial(true)" class="settings-btn settings-btn-primary">Run Tutorial</button>
+                    </div>
+                </div>
+
+                <div class="settings-card settings-card-danger" id="settingsDataCard">
+                    <h3 id="settingsDataTitle" class="settings-card-title">Data Management</h3>
+                    <div class="settings-danger-actions">
+                        <button onclick="clearAllData()" class="settings-btn settings-btn-danger settings-full-btn">Clear User Data</button>
+                    </div>
+                    <p id="clearWarningText" class="settings-warning-note">Warning: clears only the currently logged-in user data.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>MAKE A WAY - Business Tracking System (C) 2026</p>
+    </div>
+</div>
+
+<div id="onboardingOverlay" class="onboarding-overlay" style="display: none;">
+    <div class="onboarding-card">
+        <div class="onboarding-step"><span id="onboardingStepLabel">Step 1 of 6</span></div>
+        <h3 id="onboardingTitle">Welcome</h3>
+        <p id="onboardingText">This quick tutorial will guide you through the app.</p>
+        <div class="onboarding-actions">
+            <button id="onboardingSkipBtn" class="onboarding-btn mute" type="button">Skip All</button>
+            <div style="display: flex; gap: 8px;">
+                <button id="onboardingPrevBtn" class="onboarding-btn mute" type="button">Back</button>
+                <button id="onboardingNextBtn" class="onboarding-btn primary" type="button">Next</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>
+    // Web email settings (EmailJS). Fill these 3 values from your EmailJS account.
+    // Expected template variables: to_email, verification_code, app_name, purpose, purpose_label, from_name
+    window.MAW_EMAILJS_CONFIG = {
+        publicKey: '',
+        serviceId: '',
+        templateId: '',
+        fromName: 'Make A Way'
+    };
+</script>
+<script src="script.js"></script>
+<script>
+    // Make sure modal close button works
+    document.addEventListener('DOMContentLoaded', function() {
+        const modal = document.getElementById('transactionModal');
+        const closeBtn = document.querySelector('.modal-close');
+        
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function() {
+                modal.classList.remove('show');
+            });
+        }
+    });
+</script>
+</body>
+</html>
+

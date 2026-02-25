@@ -1,0 +1,7427 @@
+﻿// ================= PDF HELPER FUNCTION =================
+function getPDFConstructor() {
+    // Try multiple ways to get jsPDF constructor
+    if (window.jspdf?.jsPDF) {
+        return window.jspdf.jsPDF;
+    }
+    if (window.jsPDF) {
+        return window.jsPDF;
+    }
+    // Fallback check for different library versions
+    if (typeof jsPDF !== 'undefined') {
+        return jsPDF;
+    }
+    return null;
+}
+
+function createPDFDocument(options = {}) {
+    const jsPDF = getPDFConstructor();
+    
+    if (!jsPDF) {
+        throw new Error('jsPDF library is not loaded. Please refresh the app.');
+    }
+    
+    try {
+        return new jsPDF(options);
+    } catch (e) {
+        console.error('Error creating PDF:', e);
+        throw new Error('Failed to create PDF document: ' + e.message);
+    }
+}
+
+function applyPdfBrandHeader(doc, reportTitle = '') {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const headerHeight = 24;
+    const sidePadding = 12;
+    const title = String(reportTitle || '').trim();
+    const primary = [21, 109, 214];
+    const secondary = [12, 72, 161];
+
+    const drawHeader = () => {
+        doc.setFillColor(...secondary);
+        doc.rect(0, 0, pageWidth, headerHeight, 'F');
+        doc.setFillColor(...primary);
+        doc.rect(0, headerHeight - 5, pageWidth, 5, 'F');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(255, 255, 255);
+        doc.text('MAKE A WAY', sidePadding, 10);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.text('Business Tracking & Sales Reporting', sidePadding, 16);
+
+        if (title) {
+            const badgeWidth = Math.min(96, Math.max(48, title.length * 2.8));
+            const badgeX = pageWidth - sidePadding - badgeWidth;
+            doc.setFillColor(255, 255, 255);
+            doc.roundedRect(badgeX, 5, badgeWidth, 10, 2, 2, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.8);
+            doc.setTextColor(...secondary);
+            doc.text(title.toUpperCase().slice(0, 32), badgeX + badgeWidth / 2, 11.5, { align: 'center' });
+        }
+
+        // Soft watermark to keep all pages visually unified.
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(64);
+        doc.setTextColor(236, 245, 255);
+        doc.text('MAW', pageWidth / 2, pageHeight / 2, { align: 'center' });
+
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'normal');
+    };
+
+    drawHeader();
+
+    if (!doc.__mawHeaderWrapped) {
+        const originalAddPage = doc.addPage.bind(doc);
+        doc.addPage = (...args) => {
+            originalAddPage(...args);
+            drawHeader();
+            return doc;
+        };
+        doc.__mawHeaderWrapped = true;
+    }
+
+    return headerHeight + 8;
+}
+
+function applyPdfBrandFooter(doc, reportTitle = '') {
+    const totalPages = doc.internal.getNumberOfPages();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const sidePadding = 12;
+    const generatedAt = new Date().toLocaleString();
+    const footerLabel = reportTitle
+        ? `MAKE A WAY - ${String(reportTitle).toUpperCase()}`
+        : 'MAKE A WAY';
+
+    for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setDrawColor(210, 223, 242);
+        doc.setLineWidth(0.3);
+        doc.line(sidePadding, pageHeight - 14, pageWidth - sidePadding, pageHeight - 14);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(110, 120, 140);
+        doc.text(footerLabel, sidePadding, pageHeight - 8);
+        doc.text(`Generated: ${generatedAt}`, pageWidth / 2, pageHeight - 8, { align: 'center' });
+        doc.text(`Page ${i} of ${totalPages}`, pageWidth - sidePadding, pageHeight - 8, { align: 'right' });
+    }
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+}
+
+function parsePdfDate(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toPdfDateKey(value) {
+    const date = parsePdfDate(value);
+    if (!date) return 'unknown';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function toPdfMinuteKey(value) {
+    const date = parsePdfDate(value);
+    if (!date) return 'unknown';
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    return `${toPdfDateKey(date)} ${hh}:${mm}`;
+}
+
+function formatPdfDate(value, options = {}) {
+    const date = parsePdfDate(value);
+    return date ? date.toLocaleDateString('en-US', options) : 'N/A';
+}
+
+function formatPdfTime(value, options = { hour: '2-digit', minute: '2-digit' }) {
+    const date = parsePdfDate(value);
+    return date ? date.toLocaleTimeString('en-US', options) : 'N/A';
+}
+
+function formatPdfDateTime(value) {
+    const date = parsePdfDate(value);
+    return date
+        ? `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+        : 'N/A';
+}
+
+function formatPdfCurrency(value, prefix = 'RWF') {
+    const amount = Number(value) || 0;
+    return `${prefix} ${amount.toLocaleString()}`;
+}
+
+function drawPdfTitleBlock(doc, startY, margin, title, lines = []) {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const contentWidth = pageWidth - margin * 2;
+    const lineCount = Math.max(1, Array.isArray(lines) ? lines.length : 1);
+    const blockHeight = 16 + (lineCount * 5);
+
+    doc.setFillColor(243, 249, 255);
+    doc.setDrawColor(203, 224, 245);
+    doc.setLineWidth(0.35);
+    doc.roundedRect(margin, startY - 7, contentWidth, blockHeight, 3, 3, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(17);
+    doc.setTextColor(20, 103, 200);
+    doc.text(String(title || 'REPORT').toUpperCase(), margin + 5, startY);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(90, 112, 140);
+    (lines || []).forEach((line, idx) => {
+        doc.text(String(line || ''), margin + 5, startY + 5 + (idx * 4.8));
+    });
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    return startY + blockHeight + 1;
+}
+
+// ================= PDF LIBRARY CHECK =================
+// Ensure jsPDF and autoTable are available
+(function ensurePDFLibraries() {
+    let checkCount = 0;
+    const maxChecks = 15; // Check for up to 15 seconds
+    
+    function checkLibraries() {
+        checkCount++;
+        const hasJsPDF = (typeof window.jspdf !== 'undefined' && window.jspdf?.jsPDF) || 
+                        typeof window.jsPDF !== 'undefined';
+        
+        if (hasJsPDF) {
+            console.log('PDF libraries loaded successfully:', {
+                jspdf: typeof window.jspdf,
+                jsPDF: typeof window.jsPDF
+            });
+            return true;
+        }
+        
+        if (checkCount < maxChecks) {
+            console.warn(`Waiting for PDF libraries to load... (attempt ${checkCount}/${maxChecks})`);
+            setTimeout(checkLibraries, 1000);
+        } else {
+            console.error('PDF libraries failed to load after 15 seconds');
+        }
+        return false;
+    }
+    
+    // Check immediately on script load
+    if (!checkLibraries()) {
+        // Will keep checking via timeout
+    }
+})();
+document.addEventListener('DOMContentLoaded', () => {
+  const splash = document.getElementById('splash');
+  const splashContent = document.getElementById('splash-content');
+  const app = document.getElementById('app');
+
+  if (splash && splashContent && app) {
+    setTimeout(() => {
+      splashContent.classList.add('slide-left');
+      setTimeout(() => {
+        splash.style.display = 'none';
+        app.classList.remove('hidden');
+      }, 900);
+    }, 1200);
+  }
+});
+
+// ================= DATA MANAGEMENT =================
+let sales = [];
+let customers = [];
+let clates = [];
+let drinks = [];
+let settings = {};
+let appMeta = {};
+let saleQty = 1;
+let selectedCustomerId = null;
+let currentSaleType = "normal";
+let selectedSalesHistoryType = 'all';
+let rwandaClockInterval = null;
+let rwandaClockSyncInterval = null;
+let rwandaClockBaseEpochMs = null;
+let rwandaClockBasePerfMs = null;
+
+const RWANDA_TIME_ZONE = 'Africa/Kigali';
+const RWANDA_TIME_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+
+// ================= CART SYSTEM =================
+let cart = []; // Cart items array
+
+// ================= TRANSLATION SYSTEM =================
+let currentLanguage = 'en';
+
+const translations = {
+    en: {
+        home: 'Home',
+        addSale: 'Add Sale',
+        customers: 'Customers',
+        clate: 'Clate/Deposit',
+        salesHistory: 'Sales History',
+        reports: 'Reports',
+        settings: 'Settings',
+        login: 'Login',
+        signUp: 'Sign Up',
+        fullName: 'Full Name',
+        phoneOrEmail: 'Phone Number or Email',
+        emailAddress: 'Email Address',
+        phoneNumber: 'Phone Number',
+        pinLabel: '5-digit PIN',
+        confirmPin: 'Confirm PIN',
+        createAccount: 'Create Account',
+        continueWithGoogle: 'Continue with Google',
+        googleEmailPrompt: 'Enter your Google email',
+        googleClientIdPrompt: 'Enter Google OAuth Client ID',
+        googleClientIdLooksWrong: 'This does not look like a Google Web Client ID. It should end with .apps.googleusercontent.com',
+        googleInvalidClient: 'Google rejected this client ID (invalid_client). Use a valid Google OAuth Web Client ID and add this page URL as an authorized redirect URI.',
+        googleLoginFailed: 'Google login failed. Please try again.',
+        googleServiceUnavailable: 'Google login service is not available right now.',
+        verificationCode: 'Verification Code',
+        sendCode: 'Send Code',
+        forgotPin: 'Forgot PIN?',
+        resetPin: 'Reset PIN',
+        resetPinHint: 'Use phone, email, and verification code to set a new PIN.',
+        resetNewPin: 'New 5-digit PIN',
+        resetConfirmPin: 'Confirm New PIN',
+        cancel: 'Cancel',
+        authHintLogin: 'Welcome to Make A Way.',
+        authHintSignup: 'Create your account to secure this app.',
+        authHintReset: 'Reset your PIN with your registered phone and email.',
+        authInvalidCredentials: 'Incorrect email/phone or PIN',
+        authTooManyAttempts: 'Too many failed attempts. Try again in 1 minute.',
+        authNameRequired: 'Please enter your full name',
+        authPhoneRequired: 'Please enter a valid phone number',
+        authEmailRequired: 'Please enter your email address',
+        authEmailInvalid: 'Please enter a valid email address',
+        authPhoneExists: 'An account with this phone number already exists',
+        authEmailExists: 'An account with this email already exists',
+        authPinRules: 'PIN must be exactly 5 digits',
+        authPinMismatch: 'PIN and confirmation PIN do not match',
+        authVerificationCodeRequired: 'Please enter the verification code',
+        authVerificationCodeInvalid: 'Verification code is incorrect',
+        authVerificationCodeExpired: 'Verification code expired. Request a new code.',
+        authVerificationSendFirst: 'Send a verification code first.',
+        authCodeSent: 'Verification code sent to {email}.',
+        authCodeFallback: 'Email not configured yet. Use this code now: {code}',
+        authEmailServiceUnavailable: 'Email service is not configured. Set EmailJS keys in index.html and reload the page.',
+        authEmailSendFailed: 'Could not send verification email. Please try again.',
+        authEmailRateLimited: 'Please wait 30 seconds before requesting another code.',
+        authEmailSetupPrompt: 'Email service is not configured. Configure EmailJS now?',
+        authEmailPublicKeyPrompt: 'Enter EmailJS Public Key',
+        authEmailServiceIdPrompt: 'Enter EmailJS Service ID',
+        authEmailTemplateIdPrompt: 'Enter EmailJS Template ID',
+        authEmailFromNamePrompt: 'Enter Email sender name',
+        authEmailConfigSaved: 'Email configuration saved.',
+        authEmailConfigIncomplete: 'Email configuration is incomplete.',
+        authAccountCreated: 'Account created successfully. You can now log in.',
+        authUserNotFound: 'No account matches this phone number',
+        authResetEmailMismatch: 'The email does not match this account',
+        authPinResetSuccess: 'PIN reset successfully. You can now log in.',
+        loggedInAs: 'Logged in as',
+        todaySales: "Today's Sales",
+        todayProfit: "Today's Profit",
+        customersOwing: 'Customers Owing',
+        pendingDeposits: 'Pending Deposits',
+        availableDrinks: 'Available Drinks',
+        cartItems: 'Sale Items',
+        quickAdd: 'Quick Add Drink',
+        selectDrink: 'Select Drink',
+        quantity: 'Quantity',
+        saleType: 'Sale Type',
+        selectCustomer: 'Select Customer',
+        confirmSale: 'Confirm Sale',
+        clearCart: 'Clear Cart',
+        normalSale: 'Normal Sale (Cash)',
+        creditSale: 'Credit Sale',
+        dailyTotal: 'Daily total',
+        addNewDrink: 'Add New Drink',
+        drinkName: 'Drink Name',
+        drinkPricePlaceholder: 'Price (RWF)',
+        newDrinkProfitPerCase: 'Profit/Case (RWF)',
+        saveDrink: 'Save Drink',
+        currentSale: 'Current Sale',
+        searchDrinks: 'Search drinks...',
+        noItemsYet: 'No items added yet',
+        chooseDrink: 'Choose a drink...',
+        enterQuantity: 'Enter quantity',
+        addToCart: 'Add to Cart',
+        totalAmount: 'Total Amount',
+        remove: 'Remove',
+        all: 'All',
+        owing: 'Owing',
+        cleared: 'Cleared',
+        addCustomer: 'Add Customer',
+        exportDebtSummary: 'Export Debt Summary',
+        searchCustomers: 'Search customers by name, phone, or details...',
+        addDeposit: 'Add Deposit',
+        trackDeposits: 'Track bottle deposits and refunds.',
+        searchDeposits: 'Search deposits by customer name, description, or status...',
+        pending: 'Pending',
+        returned: 'Returned',
+        exportPdf: 'Export PDF',
+        searchSales: 'Search sales by drink, customer, or date...',
+        cash: 'Cash',
+        dateTime: 'Date & Time',
+        items: 'Item(s)',
+        unitPrice: 'Unit Price',
+        total: 'Total',
+        type: 'Type',
+        actions: 'Actions',
+        noSalesYet: 'No sales recorded yet',
+        daily: 'Daily',
+        weekly: 'Weekly',
+        monthly: 'Monthly',
+        annual: 'Annual',
+        fullReport: 'Full Report',
+        reportsHelp: 'Use quick reports (daily/weekly/monthly/annual) or choose a custom date range below.',
+        runTutorial: 'Run Tutorial',
+        tutorialSkipAll: 'Skip All',
+        tutorialBack: 'Back',
+        tutorialNext: 'Next',
+        tutorialDone: 'Done',
+        tutorialStepLabel: 'Step {current} of {total}',
+        tutorial1Title: 'Welcome to Make A Way',
+        tutorial1Text: 'This tutorial quickly shows where to start, sell, and report your business data.',
+        tutorial2Title: 'Start with Drinks',
+        tutorial2Text: 'Open Add Sale, add your own drinks and prices, then save them. New accounts start empty.',
+        tutorial3Title: 'Record Sales',
+        tutorial3Text: 'Use Sale Items and Quick Add to record daily transactions. Credit sales can be linked to customers.',
+        tutorial4Title: 'Track Customers and Deposits',
+        tutorial4Text: 'Use Customers for debt tracking and Clate/Deposit for bottle/deposit records.',
+        tutorial5Title: 'Reports and Date Range',
+        tutorial5Text: 'Use Reports for daily/weekly/monthly/annual views, or choose a custom date range and export PDF.',
+        tutorial6Title: 'Settings and Backups',
+        tutorial6Text: 'Adjust profit, language, and currency in Settings, and export/import your user data for backup.',
+        customRangeReport: 'Custom Date Range Report',
+        startDate: 'Start Date',
+        endDate: 'End Date',
+        fullMonth: 'Full Month',
+        thisMonth: 'This Month',
+        useSelectedMonth: 'Use Selected Month',
+        loadRangeReport: 'Load Range Report',
+        exportRangePdf: 'Export Range PDF',
+        rangeNote: 'Choose past or present dates only. Future dates are disabled.',
+        rangeValidation: 'Please choose valid start and end dates',
+        rangeEndBeforeStart: 'End date cannot be before start date',
+        rangeFutureNotAllowed: 'Future dates are not allowed',
+        rangeNoSales: 'No sales were found in the selected date range',
+        rangeReportTitle: 'Date Range Report',
+        rangeSummary: 'Range Summary',
+        settingsPreferences: 'Settings & Preferences',
+        businessSettings: 'Business Settings',
+        interfaceSettings: 'Appearance, Language & Currency',
+        profitPercentage: 'Profit Percentage (%)',
+        profitModeLabel: 'Profit Calculation Mode',
+        profitModePercentage: 'Percentage of sale total',
+        profitModePerCase: 'Per-drink case profit',
+        profitPerCaseLabel: 'Default Profit Per Case (RWF)',
+        drinkProfitManagerTitle: 'Per-Drink Profit Per Case',
+        saveDrinkProfits: 'Save Drink Profits',
+        drinkProfitInfo: 'Set and edit profit per case for each drink.',
+        noDrinksForProfitEditor: 'No drinks yet. Add drinks in Add Sale first.',
+        drinkProfitSaved: 'Drink profits saved',
+        save: 'Save',
+        profitInfo: 'Used to calculate profit in reports and dashboards',
+        profitSaved: 'Profit settings saved',
+        profitPercentRangeError: 'Profit percentage must be between 0 and 100',
+        profitPerCaseError: 'Profit per case cannot be negative',
+        profitLabelPerCase: 'Profit (RWF {amount} per case)',
+        profitLabelPerDrinkCase: 'Profit (per-drink case rates)',
+        profitLabelPercentage: 'Profit ({value}%)',
+        appearance: 'Appearance',
+        themeMode: 'Theme Mode',
+        lightMode: 'Light Mode',
+        darkMode: 'Dark Mode',
+        language: 'Language',
+        selectLanguage: 'Select Language',
+        languageInfo: 'Language preference for the app interface',
+        currency: 'Currency',
+        currencySymbol: 'Currency Symbol',
+        currencyInfo: 'Default currency symbol (e.g., RWF, $, EUR)',
+        saveLanguageCurrency: 'Save Language & Currency',
+        dataManagement: 'Data Management',
+        exportData: 'Export Data (JSON)',
+        importData: 'Import Data',
+        clearAllData: 'Clear User Data',
+        warningClearData: 'Warning: clears only the currently logged-in user data.',
+        storageLabel: 'Storage:',
+        activeAccountLabel: 'Active Account:',
+        notLoggedIn: 'Not logged in',
+        appInformation: 'App Information',
+        appName: 'App Name:',
+        version: 'Version:',
+        purpose: 'Purpose:',
+        appPurposeValue: 'Business Tracking & Sales Management System',
+        rightsReserved: '2026 Make A Way. All rights reserved.',
+        footerText: 'MAKE A WAY - Business Tracking System'
+    },
+    rw: {
+        home: 'Ahabanza',
+        addSale: 'Kongeramo Igurisha',
+        customers: 'Abakiriya',
+        clate: 'Ingwate/Ubwizigame',
+        salesHistory: "Amateka y'Igurisha",
+        reports: 'Raporo',
+        settings: 'Igenamiterere',
+        login: 'Injira',
+        signUp: 'Iyandikishe',
+        fullName: 'Amazina yuzuye',
+        phoneOrEmail: 'Telefoni cyangwa imeyili',
+        emailAddress: 'Imeyili',
+        phoneNumber: 'Nimero ya telefone',
+        pinLabel: 'PIN y imibare 5',
+        confirmPin: 'Emeza PIN',
+        createAccount: 'Fungura konti',
+        continueWithGoogle: 'Komeza na Google',
+        googleEmailPrompt: 'Andika imeyili ya Google',
+        googleClientIdPrompt: 'Andika Google OAuth Client ID',
+        googleClientIdLooksWrong: 'Iyi ntabwo isa na Google Web Client ID. Igomba kurangira na .apps.googleusercontent.com',
+        googleInvalidClient: 'Google yanze client ID (invalid_client). Koresha Google OAuth Web Client ID nyayo kandi wongere iyi URL ya page muri authorized redirect URIs.',
+        googleLoginFailed: 'Kwinjira ukoresheje Google ntibyakunze. Ongera ugerageze.',
+        googleServiceUnavailable: 'Serivisi ya Google login ntabwo iboneka ubu.',
+        verificationCode: 'Kode y\'iyemeza',
+        sendCode: 'Ohereza kode',
+        forgotPin: 'Wibagiwe PIN?',
+        resetPin: 'Hindura PIN',
+        resetPinHint: 'Koresha telefoni, imeyili na kode kugira ngo ushyireho PIN nshya.',
+        resetNewPin: 'PIN nshya y\'imibare 5',
+        resetConfirmPin: 'Emeza PIN nshya',
+        cancel: 'Siba',
+        authHintLogin: 'Koresha konti yawe usanzwe ufite kugira ngo ukomeze.',
+        authHintSignup: 'Banza ufungure konti kugira ngo urinde porogaramu.',
+        authHintReset: 'Hindura PIN ukoresheje telefoni n\'imeyili byanditswe kuri konti.',
+        authInvalidCredentials: 'Imeyili/telefoni cyangwa PIN si byo',
+        authTooManyAttempts: 'Wagerageje inshuro nyinshi. Ongera nyuma y umunota 1.',
+        authNameRequired: 'Andika amazina yawe yuzuye',
+        authPhoneRequired: 'Andika nimero ya telefone yemewe',
+        authEmailRequired: 'Andika imeyili yawe',
+        authEmailInvalid: 'Andika imeyili yemewe',
+        authPhoneExists: 'Iyi nimero isanzwe ifite konti',
+        authEmailExists: 'Iyi imeyili isanzwe ifite konti',
+        authPinRules: 'PIN igomba kuba imibare 5',
+        authPinMismatch: 'PIN na PIN yo kwemeza ntibihura',
+        authVerificationCodeRequired: 'Andika kode y\'iyemeza',
+        authVerificationCodeInvalid: 'Kode y\'iyemeza si yo',
+        authVerificationCodeExpired: 'Kode yararangiye. Saba indi kode.',
+        authVerificationSendFirst: 'Banza wohereze kode y\'iyemeza.',
+        authCodeSent: 'Kode y\'iyemeza yoherejwe kuri {email}.',
+        authCodeFallback: 'Email ntabwo yateguwe neza. Koresha iyi kode nonaha: {code}',
+        authEmailServiceUnavailable: 'Serivisi ya email ntabwo yateguwe. Shyiraho EmailJS keys muri index.html hanyuma usubiremo page.',
+        authEmailSendFailed: 'Ntibyakunze kohereza kode kuri email. Ongera ugerageze.',
+        authEmailRateLimited: 'Tegereza amasegonda 30 mbere yo kongera gusaba kode.',
+        authEmailSetupPrompt: 'Serivisi ya email ntabwo yateguwe. Ushaka gushyiraho EmailJS nonaha?',
+        authEmailPublicKeyPrompt: 'Andika EmailJS Public Key',
+        authEmailServiceIdPrompt: 'Andika EmailJS Service ID',
+        authEmailTemplateIdPrompt: 'Andika EmailJS Template ID',
+        authEmailFromNamePrompt: 'Andika izina rizagaragara kuri email',
+        authEmailConfigSaved: 'Igenamiterere rya email ryabitswe.',
+        authEmailConfigIncomplete: 'Igenamiterere rya email ntiryuzuye.',
+        authAccountCreated: 'Konti yakozwe neza. Ubu ushobora kwinjira.',
+        authUserNotFound: 'Nta konti ifite iyi nimero ya telefone',
+        authResetEmailMismatch: 'Imeyili ntabwo ihuye n\'iyi konti',
+        authPinResetSuccess: 'PIN yahinduwe neza. Ubu ushobora kwinjira.',
+        loggedInAs: 'Uwinjiye',
+        todaySales: "Igurisha ry'uyu munsi",
+        todayProfit: "Inyungu y'uyu munsi",
+        customersOwing: 'Abakiriya bafite umwenda',
+        pendingDeposits: 'Ingwate zitarasubizwa',
+        availableDrinks: 'Ibinyobwa bihari',
+        cartItems: "Ibyaguzwe",
+        quickAdd: 'Ongeramo vuba',
+        selectDrink: 'Hitamo ikinyobwa',
+        quantity: 'Ingano',
+        saleType: "Ubwoko bw'igurisha",
+        selectCustomer: 'Hitamo umukiriya',
+        confirmSale: 'Emeza igurisha',
+        clearCart: 'Siba ibyaguzwe',
+        normalSale: "Igurisha ry'amafaranga",
+        creditSale: "Igurisha ry'umwenda",
+        dailyTotal: "Igiteranyo cy'uyu munsi",
+        addNewDrink: 'Kongeramo ikinyobwa gishya',
+        drinkName: "Izina ry'ikinyobwa",
+        drinkPricePlaceholder: 'Igiciro (RWF)',
+        newDrinkProfitPerCase: 'Inyungu/Kaso (RWF)',
+        saveDrink: 'Bika ikinyobwa',
+        currentSale: 'Igurisha riri gukorwa',
+        searchDrinks: 'Shakisha ibinyobwa...',
+        noItemsYet: 'Nta kintu kirongerwamo',
+        chooseDrink: 'Hitamo ikinyobwa...',
+        enterQuantity: 'Andika ingano',
+        addToCart: 'Ongeramo mu byaguzwe',
+        totalAmount: 'Amafaranga yose',
+        remove: 'Kuramo',
+        all: 'Byose',
+        owing: 'Bafite umwenda',
+        cleared: 'Bishyuwe',
+        addCustomer: 'Kongeramo umukiriya',
+        exportDebtSummary: "Ohereza raporo y'imyenda",
+        searchCustomers: 'Shakisha umukiriya ukoresheje izina, telefone cyangwa ibisobanuro...',
+        addDeposit: 'Kongeramo ingwate',
+        trackDeposits: "Kurikirana ingwate n'izasubijwe.",
+        searchDeposits: "Shakisha ingwate ukoresheje izina ry'umukiriya, ibisobanuro cyangwa status...",
+        pending: 'Bitegereje',
+        returned: 'Byasubijwe',
+        exportPdf: 'Ohereza PDF',
+        searchSales: 'Shakisha igurisha ukoresheje ikinyobwa, umukiriya cyangwa itariki...',
+        cash: 'Amafaranga',
+        dateTime: 'Itariki n isaha',
+        items: 'Ibintu',
+        unitPrice: "Igiciro cy'ikintu",
+        total: 'Igiteranyo',
+        type: 'Ubwoko',
+        actions: 'Ibikorwa',
+        noSalesYet: 'Nta gurisha rirabikwa',
+        daily: 'Buri munsi',
+        weekly: 'Buri cyumweru',
+        monthly: 'Buri kwezi',
+        annual: 'Buri mwaka',
+        fullReport: 'Raporo yuzuye',
+        reportsHelp: 'Koresha raporo zihuse (umunsi/icyumweru/ukwezi/umwaka) cyangwa uhitemo itariki yihariye hepfo.',
+        runTutorial: 'Tangiza inyigisho',
+        tutorialSkipAll: 'Simbuka byose',
+        tutorialBack: 'Subira inyuma',
+        tutorialNext: 'Komeza',
+        tutorialDone: 'Rarangije',
+        tutorialStepLabel: 'Intambwe {current} kuri {total}',
+        tutorial1Title: 'Murakaza neza kuri Make A Way',
+        tutorial1Text: 'Iyi nyigisho irakwereka aho utangirira, uko ugurisha, n uko ubika amakuru y ubucuruzi.',
+        tutorial2Title: 'Tangira ushyiramo ibinyobwa',
+        tutorial2Text: 'Jya kuri Add Sale, wongeremo ibinyobwa n ibiciro byawe, ubibike. Konti nshya itangira nta kintu kirimo.',
+        tutorial3Title: 'Andika amagurisha',
+        tutorial3Text: 'Koresha Sale Items na Quick Add wandike amagurisha ya buri munsi. Umwenda ushobora kuwihuza n umukiriya.',
+        tutorial4Title: 'Kurikirana abakiriya n ingwate',
+        tutorial4Text: 'Koresha Customers gukurikirana imyenda na Clate/Deposit gukurikirana ingwate.',
+        tutorial5Title: 'Raporo n itariki yihariye',
+        tutorial5Text: 'Koresha Reports urebe umunsi/icyumweru/ukwezi/umwaka, cyangwa uhitemo itariki yihariye wohereze PDF.',
+        tutorial6Title: 'Igenamiterere na backup',
+        tutorial6Text: 'Hindura inyungu, ururimi n ifaranga muri Settings, kandi wohereze/winjize amakuru nk ububiko.',
+        customRangeReport: 'Raporo y itariki yihariye',
+        startDate: 'Itariki yo gutangira',
+        endDate: 'Itariki yo kurangiza',
+        fullMonth: 'Ukwezi kose',
+        thisMonth: 'Uku kwezi',
+        useSelectedMonth: 'Koresha ukwezi wahisemo',
+        loadRangeReport: 'Fungura raporo y itariki',
+        exportRangePdf: 'Ohereza PDF y itariki',
+        rangeNote: 'Hitamo itariki yo hambere cyangwa iy uyu munsi gusa. Iy ejo ntibyemewe.',
+        rangeValidation: 'Hitamo neza itariki yo gutangira n iyo kurangiza',
+        rangeEndBeforeStart: 'Itariki yo kurangiza ntigomba kuba mbere yo gutangira',
+        rangeFutureNotAllowed: 'Itariki yo mu gihe kizaza ntibyemewe',
+        rangeNoSales: 'Nta gurisha ryabonetse muri iyi tariki wahisemo',
+        rangeReportTitle: 'Raporo y itariki wahisemo',
+        rangeSummary: 'Incamake y itariki',
+        settingsPreferences: 'Igenamiterere',
+        businessSettings: "Igenamiterere ry'ubucuruzi",
+        interfaceSettings: 'Imigaragarire, ururimi n ifaranga',
+        profitPercentage: 'Ijanisha ry inyungu (%)',
+        profitModeLabel: "Uburyo bwo kubara inyungu",
+        profitModePercentage: "Ijanisha ku giteranyo cy'igurisha",
+        profitModePerCase: 'Inyungu kuri buri kinyobwa ku kaso',
+        profitPerCaseLabel: 'Inyungu isanzwe kuri buri kaso (RWF)',
+        drinkProfitManagerTitle: 'Inyungu kuri buri kinyobwa',
+        saveDrinkProfits: 'Bika inyungu z ibinyobwa',
+        drinkProfitInfo: 'Hindura inyungu kuri buri kaso kuri buri kinyobwa.',
+        noDrinksForProfitEditor: 'Nta kinyobwa kirimo. Banza wongere ibinyobwa muri Add Sale.',
+        drinkProfitSaved: "Inyungu z'ibinyobwa zabitswe",
+        save: 'Bika',
+        profitInfo: "Bikoreshwa kubara inyungu muri raporo na dashboard",
+        profitSaved: "Igenamiterere ry'inyungu ryabitswe",
+        profitPercentRangeError: "Ijanisha ry'inyungu rigomba kuba hagati ya 0 na 100",
+        profitPerCaseError: "Inyungu kuri buri kaso ntishobora kuba munsi ya zero",
+        profitLabelPerCase: 'Inyungu (RWF {amount} kuri buri kaso)',
+        profitLabelPerDrinkCase: 'Inyungu (igipimo cya buri kinyobwa)',
+        profitLabelPercentage: 'Inyungu ({value}%)',
+        appearance: 'Imigaragarire',
+        themeMode: 'Uburyo bw isura',
+        lightMode: 'Isura y umucyo',
+        darkMode: 'Isura y umwijima',
+        language: 'Ururimi',
+        selectLanguage: 'Hitamo ururimi',
+        languageInfo: 'Ururimi ruzakoreshwa muri porogaramu',
+        currency: 'Ifaranga',
+        currencySymbol: 'Ikimenyetso cy ifaranga',
+        currencyInfo: 'Ikimenyetso gisanzwe cy ifaranga (urugero: RWF, $, EUR)',
+        saveLanguageCurrency: 'Bika ururimi n ifaranga',
+        dataManagement: 'Gucunga amakuru',
+        exportData: 'Ohereza amakuru (JSON)',
+        importData: 'Injiza amakuru',
+        clearAllData: 'Siba amakuru y uwinjiye',
+        warningClearData: 'Iburira: bisiba gusa amakuru y uwinjiye ubu.',
+        storageLabel: 'Ububiko:',
+        activeAccountLabel: 'Konti iri gukoresha:',
+        notLoggedIn: 'Nta winjiye',
+        appInformation: 'Amakuru ya porogaramu',
+        appName: 'Izina rya porogaramu:',
+        version: 'Verisiyo:',
+        purpose: 'Intego:',
+        appPurposeValue: "Gukurikirana ubucuruzi no gucunga ibyagurishijwe",
+        rightsReserved: '2026 Make A Way. Uburenganzira bwose bwihariwe.',
+        footerText: 'MAKE A WAY - Sisitemu yo gukurikirana ubucuruzi'
+    },
+    fr: {
+        home: 'Accueil',
+        addSale: 'Ajouter une Vente',
+        customers: 'Clients',
+        clate: 'DÃ©pÃ´t/Consigne',
+        salesHistory: 'Historique des Ventes',
+        reports: 'Rapports',
+        settings: 'ParamÃ¨tres',
+        todaySales: 'Ventes du Jour',
+        todayProfit: 'Profit du Jour',
+        customersOwing: 'Clients EndettÃ©s',
+        pendingDeposits: 'DÃ©pÃ´ts en Attente',
+        availableDrinks: 'Boissons Disponibles',
+        cartItems: 'Articles de Vente',
+        quickAdd: 'Ajouter Rapidement',
+        selectDrink: 'SÃ©lectionner une Boisson',
+        quantity: 'QuantitÃ©',
+        saleType: 'Type de Vente',
+        selectCustomer: 'SÃ©lectionner un Client',
+        confirmSale: 'Confirmer la Vente',
+        clearCart: 'Vider le Panier',
+        normalSale: 'Vente en EspÃ¨ces',
+        creditSale: 'Vente Ã  CrÃ©dit'
+    }
+};
+
+// Check if running in Electron
+const isElectron = typeof window !== 'undefined' && window.electronAPI;
+
+// Default drinks for first-time setup
+const defaultDrinks = [];
+
+// Form state management
+let currentCustomerIndex = null;
+let debtAction = ''; // 'add', 'reduce', or 'clear'
+
+// ================= PERFORMANCE OPTIMIZATIONS =================
+let saveTimeout = null;
+let searchTimeout = null;
+let autoSaveInterval = null;
+let isSaving = false;
+let pendingUiConfirmResolver = null;
+
+// Debounce function for better performance
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Optimized DOM clearing
+function clearElement(element) {
+    if (!element) return;
+    element.innerHTML = '';
+}
+
+// Global escape helper (used by UI renderers)
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+}
+
+function showSuccessToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'maw-success-toast';
+    toast.innerHTML = `<span class="tick">&#10004;</span><span>${escapeHtml(message)}</span>`;
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+    });
+
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 220);
+    }, 2300);
+}
+
+function closeUiConfirm(result = false) {
+    const overlay = document.getElementById('uiConfirmOverlay');
+    if (overlay) overlay.style.display = 'none';
+    const resolver = pendingUiConfirmResolver;
+    pendingUiConfirmResolver = null;
+    if (typeof resolver === 'function') {
+        resolver(Boolean(result));
+    }
+}
+
+function ensureUiConfirmBindings() {
+    const overlay = document.getElementById('uiConfirmOverlay');
+    const cancelBtn = document.getElementById('uiConfirmCancelBtn');
+    const okBtn = document.getElementById('uiConfirmOkBtn');
+    if (!overlay || !cancelBtn || !okBtn) return false;
+
+    if (!overlay.dataset.bound) {
+        cancelBtn.addEventListener('click', () => closeUiConfirm(false));
+        okBtn.addEventListener('click', () => closeUiConfirm(true));
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeUiConfirm(false);
+        });
+        overlay.dataset.bound = '1';
+    }
+
+    return true;
+}
+
+function showUiConfirm(options = {}) {
+    const {
+        title = 'Confirm Action',
+        message = 'Are you sure you want to continue?',
+        confirmText = 'Confirm',
+        cancelText = 'Cancel'
+    } = options;
+
+    const overlay = document.getElementById('uiConfirmOverlay');
+    const titleEl = document.getElementById('uiConfirmTitle');
+    const messageEl = document.getElementById('uiConfirmMessage');
+    const cancelBtn = document.getElementById('uiConfirmCancelBtn');
+    const okBtn = document.getElementById('uiConfirmOkBtn');
+
+    if (!overlay || !titleEl || !messageEl || !cancelBtn || !okBtn || !ensureUiConfirmBindings()) {
+        return Promise.resolve(window.confirm(String(message)));
+    }
+
+    titleEl.textContent = String(title);
+    messageEl.textContent = String(message);
+    cancelBtn.textContent = String(cancelText);
+    okBtn.textContent = String(confirmText);
+
+    overlay.style.display = 'block';
+    return new Promise((resolve) => {
+        pendingUiConfirmResolver = resolve;
+    });
+}
+
+// Optimized save function with batching
+async function optimizedSaveData() {
+    if (isSaving) return;
+    
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
+    }
+    
+    return new Promise((resolve) => {
+        saveTimeout = setTimeout(async () => {
+            isSaving = true;
+            try {
+                await saveData();
+            } catch (error) {
+                console.error('Save error:', error);
+            } finally {
+                isSaving = false;
+                saveTimeout = null;
+                resolve();
+            }
+        }, 500);
+    });
+}
+
+// ================= ELECTRON + WEB STORAGE =================
+const APP_META_STORAGE_KEY = 'app_meta';
+
+function getDefaultAppMeta() {
+    return {
+        authUsers: [],
+        lastLoginPhone: '',
+        legacyDataMigrated: false
+    };
+}
+
+function getDefaultUserSettings() {
+    return {
+        profitPercentage: 30,
+        profitMode: 'percentage',
+        theme: 'light',
+        language: 'en',
+        currency: 'RWF',
+        onboardingDone: false
+    };
+}
+
+function isPlainObject(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sanitizeUserSettings(raw) {
+    const next = isPlainObject(raw) ? { ...raw } : {};
+    delete next.authUsers;
+    delete next.lastLoginPhone;
+    delete next.legacyMigratedUsers;
+    delete next.legacyDataMigrated;
+    delete next.profitPerCase;
+    return { ...getDefaultUserSettings(), ...next };
+}
+
+function getDefaultDrinkProfitPerCase() {
+    return 700;
+}
+
+function sanitizeDrinkEntry(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const name = String(raw.name || '').trim();
+    if (!name) return null;
+    const parsedPrice = Number(raw.price);
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) return null;
+    const parsedProfitPerCase = Number(raw.profitPerCase);
+    return {
+        name,
+        price: parsedPrice,
+        profitPerCase: (Number.isFinite(parsedProfitPerCase) && parsedProfitPerCase >= 0)
+            ? parsedProfitPerCase
+            : getDefaultDrinkProfitPerCase()
+    };
+}
+
+function normalizeDrinksData() {
+    if (!Array.isArray(drinks)) {
+        drinks = [];
+        return;
+    }
+    drinks = drinks
+        .map((drink) => sanitizeDrinkEntry(drink))
+        .filter(Boolean);
+}
+
+function getDrinkProfitPerCaseByName(drinkName) {
+    const target = String(drinkName || '').toLowerCase().trim();
+    const match = drinks.find((drink) => String(drink.name || '').toLowerCase() === target);
+    if (match && Number.isFinite(Number(match.profitPerCase))) {
+        return Math.max(0, Number(match.profitPerCase));
+    }
+    return getDefaultDrinkProfitPerCase();
+}
+
+function getUserStorageId(user = activeUser) {
+    if (!user) return '';
+    const normalized = normalizePhone(user.phone);
+    if (normalized) return normalized;
+    return String(user.id || '');
+}
+
+function userDataKey(base, user = activeUser) {
+    const id = getUserStorageId(user);
+    return id ? `${base}__${id}` : '';
+}
+
+function localStorageKey(name) {
+    return `makeaway_${name}`;
+}
+
+async function readIndexedDbKey(name) {
+    try {
+        const db = await openAppDB();
+        return await new Promise((resolve) => {
+            const tx = db.transaction(DB_STORE, 'readonly');
+            const req = tx.objectStore(DB_STORE).get(name);
+            req.onsuccess = () => {
+                db.close();
+                resolve(req.result);
+            };
+            req.onerror = () => {
+                db.close();
+                resolve(null);
+            };
+        });
+    } catch (_) {
+        return null;
+    }
+}
+
+async function writeIndexedDbKey(name, value) {
+    try {
+        const db = await openAppDB();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(DB_STORE, 'readwrite');
+            tx.objectStore(DB_STORE).put(value, name);
+            tx.oncomplete = () => {
+                db.close();
+                resolve(true);
+            };
+            tx.onerror = () => {
+                db.close();
+                reject(tx.error);
+            };
+        });
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+function readLocalStorageKey(name) {
+    try {
+        const raw = localStorage.getItem(localStorageKey(name));
+        return raw ? JSON.parse(raw) : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function writeLocalStorageKey(name, value) {
+    try {
+        localStorage.setItem(localStorageKey(name), JSON.stringify(value));
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+async function loadNamedData(name, defaultValue) {
+    if (!name) return defaultValue;
+
+    if (isElectron) {
+        try {
+            const result = await window.electronAPI.invoke('load-data', name);
+            if (result && result.success) return result.data;
+        } catch (_) {}
+    }
+
+    const fromDb = await readIndexedDbKey(name);
+    if (fromDb !== null && fromDb !== undefined) return fromDb;
+
+    const fromLs = readLocalStorageKey(name);
+    if (fromLs !== null && fromLs !== undefined) return fromLs;
+
+    return defaultValue;
+}
+
+async function saveNamedData(name, value) {
+    if (!name) return false;
+
+    if (isElectron) {
+        try {
+            const result = await window.electronAPI.invoke('save-data', name, value);
+            if (result && result.success) {
+                return true;
+            }
+        } catch (_) {}
+    }
+
+    const dbSaved = await writeIndexedDbKey(name, value);
+    const lsSaved = writeLocalStorageKey(name, value);
+    return dbSaved || lsSaved;
+}
+
+async function loadManyNamedData(requests) {
+    const validRequests = Array.isArray(requests)
+        ? requests.filter((item) => item && item.name)
+        : [];
+    if (validRequests.length === 0) return {};
+
+    if (isElectron) {
+        try {
+            const names = validRequests.map((item) => item.name);
+            const result = await window.electronAPI.invoke('load-bulk-data', names);
+            if (result && result.success && result.data && typeof result.data === 'object') {
+                const output = {};
+                validRequests.forEach(({ name, defaultValue }) => {
+                    const hasKey = Object.prototype.hasOwnProperty.call(result.data, name);
+                    const value = hasKey ? result.data[name] : defaultValue;
+                    output[name] = value === undefined || value === null ? defaultValue : value;
+                });
+                return output;
+            }
+        } catch (_) {}
+    }
+
+    const fallback = {};
+    await Promise.all(validRequests.map(async ({ name, defaultValue }) => {
+        fallback[name] = await loadNamedData(name, defaultValue);
+    }));
+    return fallback;
+}
+
+async function saveManyNamedData(entries) {
+    const validEntries = Array.isArray(entries)
+        ? entries.filter((item) => item && item.name)
+        : [];
+    if (validEntries.length === 0) return false;
+
+    if (isElectron) {
+        try {
+            const payload = {};
+            validEntries.forEach(({ name, value }) => {
+                payload[name] = value;
+            });
+            const result = await window.electronAPI.invoke('save-bulk-data', payload);
+            if (result && result.success) return true;
+        } catch (_) {}
+    }
+
+    const results = await Promise.all(validEntries.map(({ name, value }) => saveNamedData(name, value)));
+    return results.some(Boolean);
+}
+
+async function initializeUserStorage(user = activeUser) {
+    const salesKey = userDataKey('sales', user);
+    const customersKey = userDataKey('customers', user);
+    const clatesKey = userDataKey('clates', user);
+    const drinksKey = userDataKey('drinks', user);
+    const settingsKey = userDataKey('settings', user);
+    if (!salesKey || !customersKey || !clatesKey || !drinksKey || !settingsKey) return;
+
+    await saveManyNamedData([
+        { name: salesKey, value: [] },
+        { name: customersKey, value: [] },
+        { name: clatesKey, value: [] },
+        { name: drinksKey, value: [] },
+        { name: settingsKey, value: getDefaultUserSettings() }
+    ]);
+}
+
+async function migrateLegacyDataIfNeeded() {
+    if (appMeta.legacyDataMigrated) return;
+
+    if (Array.isArray(appMeta.authUsers) && appMeta.authUsers.length > 1) {
+        appMeta.legacyDataMigrated = true;
+        await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+        return;
+    }
+
+    const hasScopedData = sales.length > 0 || customers.length > 0 || clates.length > 0 || drinks.length > 0;
+    if (hasScopedData) {
+        appMeta.legacyDataMigrated = true;
+        await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+        return;
+    }
+
+    const legacySales = await loadNamedData('sales', []);
+    const legacyCustomers = await loadNamedData('customers', []);
+    const legacyClates = await loadNamedData('clates', []);
+    const legacyDrinks = await loadNamedData('drinks', []);
+    const legacySettingsRaw = await loadNamedData('settings', {});
+    const legacySettings = sanitizeUserSettings(legacySettingsRaw);
+
+    const legacyHasData =
+        (Array.isArray(legacySales) && legacySales.length > 0) ||
+        (Array.isArray(legacyCustomers) && legacyCustomers.length > 0) ||
+        (Array.isArray(legacyClates) && legacyClates.length > 0) ||
+        (Array.isArray(legacyDrinks) && legacyDrinks.length > 0);
+
+    if (legacyHasData) {
+        sales = Array.isArray(legacySales) ? legacySales : [];
+        customers = Array.isArray(legacyCustomers) ? legacyCustomers : [];
+        clates = Array.isArray(legacyClates) ? legacyClates : [];
+        drinks = Array.isArray(legacyDrinks) ? legacyDrinks : [];
+        settings = legacySettings;
+        await saveData();
+    } else {
+        settings = sanitizeUserSettings(settings);
+    }
+
+    appMeta.legacyDataMigrated = true;
+    await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+}
+
+async function loadActiveUserData(user = activeUser) {
+    const salesKey = userDataKey('sales', user);
+    const customersKey = userDataKey('customers', user);
+    const clatesKey = userDataKey('clates', user);
+    const drinksKey = userDataKey('drinks', user);
+    const settingsKey = userDataKey('settings', user);
+
+    if (!salesKey || !customersKey || !clatesKey || !drinksKey || !settingsKey) {
+        sales = [];
+        customers = [];
+        clates = [];
+        drinks = [];
+        settings = getDefaultUserSettings();
+        return;
+    }
+
+    const loadedMap = await loadManyNamedData([
+        { name: salesKey, defaultValue: [] },
+        { name: customersKey, defaultValue: [] },
+        { name: clatesKey, defaultValue: [] },
+        { name: drinksKey, defaultValue: [] },
+        { name: settingsKey, defaultValue: {} }
+    ]);
+    const loadedSales = loadedMap[salesKey];
+    const loadedCustomers = loadedMap[customersKey];
+    const loadedClates = loadedMap[clatesKey];
+    const loadedDrinks = loadedMap[drinksKey];
+    const loadedSettings = loadedMap[settingsKey];
+
+    sales = Array.isArray(loadedSales) ? loadedSales : [];
+    customers = Array.isArray(loadedCustomers) ? loadedCustomers : [];
+    clates = Array.isArray(loadedClates) ? loadedClates : [];
+    drinks = Array.isArray(loadedDrinks) ? loadedDrinks : [];
+    settings = sanitizeUserSettings(loadedSettings);
+    normalizeDrinksData();
+
+    await migrateLegacyDataIfNeeded();
+}
+
+async function loadAllData() {
+    const loadedMeta = await loadNamedData(APP_META_STORAGE_KEY, getDefaultAppMeta());
+    appMeta = isPlainObject(loadedMeta) ? { ...getDefaultAppMeta(), ...loadedMeta } : getDefaultAppMeta();
+
+    // One-time compatibility: pull auth users from old shared settings if present.
+    const legacySettings = await loadNamedData('settings', {});
+    let metaChanged = false;
+    if ((!Array.isArray(appMeta.authUsers) || appMeta.authUsers.length === 0) && Array.isArray(legacySettings?.authUsers)) {
+        appMeta.authUsers = legacySettings.authUsers;
+        metaChanged = true;
+    }
+    if (!appMeta.lastLoginPhone && legacySettings?.lastLoginPhone) {
+        appMeta.lastLoginPhone = legacySettings.lastLoginPhone;
+        metaChanged = true;
+    }
+    if (typeof appMeta.legacyDataMigrated !== 'boolean') {
+        appMeta.legacyDataMigrated = Array.isArray(appMeta.legacyMigratedUsers)
+            ? appMeta.legacyMigratedUsers.length > 0
+            : false;
+        metaChanged = true;
+    }
+    if (metaChanged) await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+
+    // Login screen should not carry previous user's in-memory data.
+    sales = [];
+    customers = [];
+    clates = [];
+    drinks = [];
+    settings = getDefaultUserSettings();
+}
+
+function buildCurrentSavePayload(user = activeUser) {
+    const payload = {
+        [APP_META_STORAGE_KEY]: appMeta
+    };
+
+    if (!user) return payload;
+    normalizeDrinksData();
+
+    const salesKey = userDataKey('sales', user);
+    const customersKey = userDataKey('customers', user);
+    const clatesKey = userDataKey('clates', user);
+    const drinksKey = userDataKey('drinks', user);
+    const settingsKey = userDataKey('settings', user);
+    if (!salesKey || !customersKey || !clatesKey || !drinksKey || !settingsKey) return payload;
+
+    payload[salesKey] = Array.isArray(sales) ? sales : [];
+    payload[customersKey] = Array.isArray(customers) ? customers : [];
+    payload[clatesKey] = Array.isArray(clates) ? clates : [];
+    payload[drinksKey] = Array.isArray(drinks) ? drinks : [];
+    payload[settingsKey] = sanitizeUserSettings(settings);
+    return payload;
+}
+
+function flushDataSyncOnExit(user = activeUser) {
+    if (!isElectron || !window.electronAPI || typeof window.electronAPI.saveAllSync !== 'function') return;
+    try {
+        const payload = buildCurrentSavePayload(user);
+        window.electronAPI.saveAllSync(payload);
+        if (typeof window.electronAPI.invoke === 'function') {
+            window.electronAPI.invoke('flush-data').catch(() => {});
+        }
+    } catch (error) {
+        console.warn('Sync save on exit failed:', error);
+    }
+}
+
+// Save current context
+async function saveData() {
+    const payload = buildCurrentSavePayload(activeUser);
+    const entries = Object.entries(payload).map(([name, value]) => ({ name, value }));
+    await saveManyNamedData(entries);
+}
+
+// ================= LOGIN / SIGNUP SYSTEM =================
+let authMode = 'login';
+let activeUser = null;
+let failedLoginAttempts = 0;
+let loginLockedUntil = 0;
+let onboardingStepIndex = 0;
+let onboardingVisible = false;
+let pendingOnboardingStart = false;
+let pendingSignupVerification = null;
+let pendingResetVerification = null;
+let forgotPinVisible = false;
+
+const AUTH_VERIFICATION_TTL_MS = 10 * 60 * 1000;
+const AUTH_CODE_REGEX = /^\d{6}$/;
+const AUTH_EMAIL_CLIENT_RATE_LIMIT_MS = 30 * 1000;
+const EMAILJS_CONFIG_STORAGE_KEY = 'maw_emailjs_config';
+const GOOGLE_CLIENT_ID_STORAGE_KEY = 'maw_google_client_id';
+const GOOGLE_OAUTH_STATE_STORAGE_KEY = 'maw_google_oauth_state';
+const authEmailClientLastSent = new Map();
+let emailJsInitialized = false;
+let googleIdentityInitialized = false;
+let googleIdentityClientId = '';
+
+function normalizePhone(phone) {
+    return String(phone || '').replace(/\D/g, '');
+}
+
+function normalizeEmail(email) {
+    return String(email || '').trim().toLowerCase();
+}
+
+function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
+}
+
+function generateAuthCode() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function loadSavedEmailJsConfig() {
+    try {
+        const raw = localStorage.getItem(EMAILJS_CONFIG_STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+        return {};
+    }
+}
+
+function saveEmailJsConfig(config) {
+    try {
+        const next = {
+            publicKey: String(config?.publicKey || '').trim(),
+            serviceId: String(config?.serviceId || '').trim(),
+            templateId: String(config?.templateId || '').trim(),
+            fromName: String(config?.fromName || 'Make A Way').trim() || 'Make A Way'
+        };
+        localStorage.setItem(EMAILJS_CONFIG_STORAGE_KEY, JSON.stringify(next));
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+function loadSavedGoogleClientId() {
+    try {
+        return String(localStorage.getItem(GOOGLE_CLIENT_ID_STORAGE_KEY) || '').trim();
+    } catch (_) {
+        return '';
+    }
+}
+
+function saveGoogleClientId(clientId) {
+    const normalized = String(clientId || '').trim();
+    if (!normalized) return false;
+    try {
+        localStorage.setItem(GOOGLE_CLIENT_ID_STORAGE_KEY, normalized);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+function getGoogleAuthClientId() {
+    const raw = (typeof window !== 'undefined' && window.MAW_GOOGLE_OAUTH_CONFIG && typeof window.MAW_GOOGLE_OAUTH_CONFIG === 'object')
+        ? window.MAW_GOOGLE_OAUTH_CONFIG
+        : {};
+    return String(raw.clientId || loadSavedGoogleClientId() || '').trim();
+}
+
+function isValidGoogleClientIdFormat(clientId) {
+    const value = String(clientId || '').trim();
+    return /^[0-9]+-[a-zA-Z0-9_.-]+\.apps\.googleusercontent\.com$/.test(value);
+}
+
+function normalizeGoogleClientId(clientIdInput) {
+    const raw = String(clientIdInput || '').trim();
+    if (!raw) return '';
+    const match = raw.match(/[0-9]+-[a-zA-Z0-9_.-]+\.apps\.googleusercontent\.com/);
+    return match ? match[0] : raw;
+}
+
+function ensureGoogleAuthClientId() {
+    const existing = normalizeGoogleClientId(getGoogleAuthClientId());
+    if (existing && isValidGoogleClientIdFormat(existing)) {
+        saveGoogleClientId(existing);
+        if (typeof window !== 'undefined') {
+            window.MAW_GOOGLE_OAUTH_CONFIG = {
+                ...(window.MAW_GOOGLE_OAUTH_CONFIG || {}),
+                clientId: existing
+            };
+        }
+        return existing;
+    }
+
+    const prompted = window.prompt(t('googleClientIdPrompt'), existing || '');
+    if (prompted === null) return '';
+    const clientId = normalizeGoogleClientId(prompted);
+    if (!clientId) return '';
+
+    if (!isValidGoogleClientIdFormat(clientId)) {
+        alert(t('googleClientIdLooksWrong'));
+    }
+
+    saveGoogleClientId(clientId);
+    if (typeof window !== 'undefined') {
+        window.MAW_GOOGLE_OAUTH_CONFIG = {
+            ...(window.MAW_GOOGLE_OAUTH_CONFIG || {}),
+            clientId
+        };
+    }
+    initializeGoogleIdentityUi();
+    return clientId;
+}
+
+function getEmailJsConfig() {
+    const fromStorage = loadSavedEmailJsConfig();
+    const raw = (typeof window !== 'undefined' && window.MAW_EMAILJS_CONFIG && typeof window.MAW_EMAILJS_CONFIG === 'object')
+        ? window.MAW_EMAILJS_CONFIG
+        : {};
+
+    return {
+        publicKey: String(raw.publicKey || fromStorage.publicKey || '').trim(),
+        serviceId: String(raw.serviceId || fromStorage.serviceId || '').trim(),
+        templateId: String(raw.templateId || fromStorage.templateId || '').trim(),
+        fromName: String(raw.fromName || fromStorage.fromName || 'Make A Way').trim() || 'Make A Way'
+    };
+}
+
+function isEmailJsConfigured(config = getEmailJsConfig()) {
+    return Boolean(config.publicKey && config.serviceId && config.templateId);
+}
+
+function promptForEmailJsConfig() {
+    if (!window.confirm(t('authEmailSetupPrompt'))) return null;
+    const existing = getEmailJsConfig();
+    const publicKey = window.prompt(t('authEmailPublicKeyPrompt'), existing.publicKey || '');
+    if (publicKey === null) return null;
+    const serviceId = window.prompt(t('authEmailServiceIdPrompt'), existing.serviceId || '');
+    if (serviceId === null) return null;
+    const templateId = window.prompt(t('authEmailTemplateIdPrompt'), existing.templateId || '');
+    if (templateId === null) return null;
+    const fromName = window.prompt(t('authEmailFromNamePrompt'), existing.fromName || 'Make A Way');
+    if (fromName === null) return null;
+
+    const config = {
+        publicKey: String(publicKey || '').trim(),
+        serviceId: String(serviceId || '').trim(),
+        templateId: String(templateId || '').trim(),
+        fromName: String(fromName || '').trim() || 'Make A Way'
+    };
+    if (!isEmailJsConfigured(config)) {
+        alert(t('authEmailConfigIncomplete'));
+        return null;
+    }
+
+    saveEmailJsConfig(config);
+    if (typeof window !== 'undefined') {
+        window.MAW_EMAILJS_CONFIG = {
+            ...(window.MAW_EMAILJS_CONFIG || {}),
+            ...config
+        };
+    }
+    emailJsInitialized = false;
+    showSuccessToast(t('authEmailConfigSaved'));
+    return config;
+}
+
+function findUserByLoginIdentifier(identifierValue, users = getAuthUsers()) {
+    const raw = String(identifierValue || '').trim();
+    if (!raw) return null;
+
+    if (raw.includes('@')) {
+        const email = normalizeEmail(raw);
+        return users.find((u) => normalizeEmail(u.email) === email) || null;
+    }
+
+    const phone = normalizePhone(raw);
+    if (!phone) return null;
+    return users.find((u) => normalizePhone(u.phone) === phone) || null;
+}
+
+function buildGoogleOAuthState() {
+    if (typeof window !== 'undefined' && window.crypto && typeof window.crypto.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16);
+        window.crypto.getRandomValues(bytes);
+        return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+    }
+    return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
+
+function getGoogleOAuthRedirectUri() {
+    if (typeof window === 'undefined') return '';
+    const current = new URL(window.location.href);
+    return `${current.origin}${current.pathname}`;
+}
+
+function buildGoogleOAuthUrl(clientId, state) {
+    const redirectUri = getGoogleOAuthRedirectUri();
+    const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'token',
+        scope: 'openid email profile',
+        include_granted_scopes: 'true',
+        prompt: 'select_account',
+        state
+    });
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+}
+
+function decodeJwtPayload(token) {
+    const parts = String(token || '').split('.');
+    if (parts.length < 2) return null;
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = payload + '='.repeat((4 - (payload.length % 4 || 4)) % 4);
+    try {
+        return JSON.parse(atob(padded));
+    } catch (_) {
+        return null;
+    }
+}
+
+async function handleGoogleCredentialResponse(response) {
+    const credential = String(response?.credential || '').trim();
+    if (!credential) {
+        alert(t('googleLoginFailed'));
+        return;
+    }
+
+    try {
+        const payload = decodeJwtPayload(credential);
+        if (!payload || !payload.email || !payload.sub) {
+            throw new Error('GOOGLE_CREDENTIAL_INVALID');
+        }
+        await loginWithGoogleProfile({
+            email: payload.email,
+            sub: payload.sub,
+            name: payload.name || payload.given_name || '',
+            given_name: payload.given_name || '',
+            picture: payload.picture || ''
+        });
+    } catch (error) {
+        console.error('Google credential login failed:', error);
+        alert(t('googleLoginFailed'));
+    }
+}
+
+function initializeGoogleIdentityUi() {
+    const container = document.getElementById('googleOfficialSignIn');
+    if (!container) return;
+
+    if (authMode !== 'login' || forgotPinVisible) {
+        container.style.display = 'none';
+        return;
+    }
+
+    const clientId = normalizeGoogleClientId(getGoogleAuthClientId());
+    const hasGoogleSdk = Boolean(window.google && window.google.accounts && window.google.accounts.id);
+    if (!clientId || !isValidGoogleClientIdFormat(clientId) || !hasGoogleSdk) {
+        container.style.display = 'none';
+        return;
+    }
+
+    if (!googleIdentityInitialized || googleIdentityClientId !== clientId) {
+        window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: handleGoogleCredentialResponse,
+            auto_select: false,
+            cancel_on_tap_outside: true
+        });
+        googleIdentityInitialized = true;
+        googleIdentityClientId = clientId;
+    }
+
+    container.innerHTML = '';
+    window.google.accounts.id.renderButton(container, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'continue_with',
+        shape: 'rectangular',
+        logo_alignment: 'left',
+        width: 320
+    });
+    container.style.display = 'flex';
+}
+
+function scheduleGoogleIdentityUiInit(retries = 15) {
+    if (retries <= 0) return;
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+        initializeGoogleIdentityUi();
+        return;
+    }
+    setTimeout(() => {
+        scheduleGoogleIdentityUiInit(retries - 1);
+    }, 300);
+}
+
+function getGoogleOAuthSetupHintText() {
+    try {
+        const redirectUri = getGoogleOAuthRedirectUri();
+        const origin = new URL(redirectUri).origin;
+        return `\n\nAuthorized JavaScript origin:\n${origin}\n\nAuthorized redirect URI:\n${redirectUri}`;
+    } catch (_) {
+        return '';
+    }
+}
+
+async function fetchGoogleUserProfile(accessToken) {
+    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: {
+            Authorization: `Bearer ${accessToken}`
+        }
+    });
+    if (!response.ok) {
+        throw new Error(`GOOGLE_USERINFO_HTTP_${response.status}`);
+    }
+    const data = await response.json();
+    if (!data || !data.email || !data.sub) {
+        throw new Error('GOOGLE_PROFILE_INCOMPLETE');
+    }
+    return data;
+}
+
+async function completeLoginForUser(user) {
+    failedLoginAttempts = 0;
+    loginLockedUntil = 0;
+    activeUser = user;
+    appMeta.lastLoginPhone = user.phone || user.email || '';
+    await loadActiveUserData(user);
+    pendingOnboardingStart = !settings.onboardingDone &&
+        sales.length === 0 &&
+        customers.length === 0 &&
+        clates.length === 0 &&
+        drinks.length === 0;
+    await optimizedSaveData();
+    updateActiveUserBadge();
+    showWelcomeAnimation();
+}
+
+async function loginWithGoogleProfile(googleProfile) {
+    const users = getAuthUsers();
+    const email = normalizeEmail(googleProfile.email);
+    const googleSub = String(googleProfile.sub || '').trim();
+
+    let user = users.find((u) => String(u.googleSub || '').trim() === googleSub);
+    if (!user) {
+        user = users.find((u) => normalizeEmail(u.email) === email);
+    }
+
+    const nowIso = new Date().toISOString();
+    if (!user) {
+        user = {
+            id: Date.now() + Math.floor(Math.random() * 1000),
+            name: String(googleProfile.name || googleProfile.given_name || email.split('@')[0] || 'User').trim(),
+            email,
+            phone: '',
+            pin: '',
+            role: users.length === 0 ? 'owner' : 'staff',
+            authProvider: 'google',
+            googleSub,
+            avatarUrl: String(googleProfile.picture || '').trim(),
+            emailVerifiedAt: nowIso,
+            createdAt: nowIso
+        };
+        users.push(user);
+        appMeta.authUsers = users;
+        await initializeUserStorage({ id: user.id, phone: user.phone || '' });
+    } else {
+        user.name = String(user.name || googleProfile.name || googleProfile.given_name || email.split('@')[0] || 'User').trim();
+        user.email = email;
+        user.googleSub = googleSub;
+        user.authProvider = 'google';
+        if (String(googleProfile.picture || '').trim()) {
+            user.avatarUrl = String(googleProfile.picture || '').trim();
+        }
+        user.emailVerifiedAt = user.emailVerifiedAt || nowIso;
+        appMeta.authUsers = users;
+    }
+
+    await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+    await completeLoginForUser(user);
+}
+
+async function handleGoogleOAuthRedirectIfNeeded() {
+    if (typeof window === 'undefined') return false;
+    const hashRaw = String(window.location.hash || '');
+    if (!hashRaw) return false;
+
+    const hashParams = new URLSearchParams(hashRaw.startsWith('#') ? hashRaw.slice(1) : hashRaw);
+    const accessToken = String(hashParams.get('access_token') || '').trim();
+    const error = String(hashParams.get('error') || '').trim();
+    const errorDescription = String(hashParams.get('error_description') || '').trim();
+    const returnedState = String(hashParams.get('state') || '').trim();
+
+    if (!accessToken && !error) return false;
+
+    let expectedState = '';
+    try {
+        expectedState = String(sessionStorage.getItem(GOOGLE_OAUTH_STATE_STORAGE_KEY) || '').trim();
+        sessionStorage.removeItem(GOOGLE_OAUTH_STATE_STORAGE_KEY);
+    } catch (_) {}
+
+    try {
+        const cleanUrl = getGoogleOAuthRedirectUri();
+        if (window.history && typeof window.history.replaceState === 'function') {
+            window.history.replaceState({}, document.title, cleanUrl);
+        }
+    } catch (_) {}
+
+    if (error || !accessToken || !returnedState || !expectedState || returnedState !== expectedState) {
+        if (error === 'invalid_client') {
+            const details = errorDescription ? `\n\nGoogle details:\n${errorDescription}` : '';
+            alert(`${t('googleInvalidClient')}${details}${getGoogleOAuthSetupHintText()}`);
+        } else {
+            alert(t('googleLoginFailed'));
+        }
+        return true;
+    }
+
+    try {
+        const googleProfile = await fetchGoogleUserProfile(accessToken);
+        await loginWithGoogleProfile(googleProfile);
+    } catch (e) {
+        console.error('Google redirect login failed:', e);
+        alert(t('googleLoginFailed'));
+    }
+    return true;
+}
+
+async function sendAuthCodeByEmailJs(email, code, purpose) {
+    if (typeof window === 'undefined' || !window.emailjs) {
+        return { success: false, code: 'EMAILJS_UNAVAILABLE' };
+    }
+
+    const config = getEmailJsConfig();
+    if (!isEmailJsConfigured(config)) {
+        return { success: false, code: 'EMAILJS_NOT_CONFIGURED' };
+    }
+
+    try {
+        if (!emailJsInitialized) {
+            window.emailjs.init({ publicKey: config.publicKey });
+            emailJsInitialized = true;
+        }
+
+        const normalizedPurpose = String(purpose || 'verification').trim().toLowerCase();
+        const purposeLabel = normalizedPurpose === 'reset'
+            ? 'PIN reset'
+            : (normalizedPurpose === 'signup' ? 'Account signup' : 'Account verification');
+
+        await window.emailjs.send(config.serviceId, config.templateId, {
+            to_email: email,
+            verification_code: String(code).trim(),
+            app_name: 'Make A Way',
+            purpose: normalizedPurpose,
+            purpose_label: purposeLabel,
+            from_name: config.fromName
+        });
+
+        return { success: true };
+    } catch (error) {
+        console.error('EmailJS send failed:', error);
+        return { success: false, code: 'EMAILJS_SEND_FAILED' };
+    }
+}
+
+async function sendAuthCodeByEmail(email, code, purpose) {
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPurpose = String(purpose || 'verification').trim().toLowerCase();
+    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+        return { success: false, message: t('authEmailInvalid') };
+    }
+    if (!AUTH_CODE_REGEX.test(String(code || '').trim())) {
+        return { success: false, message: t('authVerificationCodeInvalid') };
+    }
+
+    const rateLimitKey = `${normalizedPurpose}:${normalizedEmail}`;
+    const lastSentAt = authEmailClientLastSent.get(rateLimitKey) || 0;
+    if (Date.now() - lastSentAt < AUTH_EMAIL_CLIENT_RATE_LIMIT_MS) {
+        return { success: false, message: t('authEmailRateLimited') };
+    }
+
+    // Browser-first path (works directly from index.html).
+    const emailJsResult = await sendAuthCodeByEmailJs(normalizedEmail, code, normalizedPurpose);
+    if (emailJsResult.success) {
+        authEmailClientLastSent.set(rateLimitKey, Date.now());
+        return { success: true };
+    }
+
+    if (emailJsResult.code === 'EMAILJS_NOT_CONFIGURED' || emailJsResult.code === 'EMAILJS_UNAVAILABLE') {
+        const config = promptForEmailJsConfig();
+        if (config && isEmailJsConfigured(config)) {
+            const retry = await sendAuthCodeByEmailJs(normalizedEmail, code, normalizedPurpose);
+            if (retry.success) {
+                authEmailClientLastSent.set(rateLimitKey, Date.now());
+                return { success: true };
+            }
+        }
+        // Do not block user if email provider is not set yet.
+        authEmailClientLastSent.set(rateLimitKey, Date.now());
+        return {
+            success: true,
+            message: `${t('authCodeSent').replace('{email}', normalizedEmail)} ${t('authCodeFallback').replace('{code}', String(code).trim())}`
+        };
+    }
+
+    // Electron fallback path.
+    if (window.electronAPI && typeof window.electronAPI.invoke === 'function') {
+        try {
+            const result = await window.electronAPI.invoke('send-auth-code-email', {
+                to: normalizedEmail,
+                code: String(code).trim(),
+                purpose: normalizedPurpose,
+                appName: 'Make A Way'
+            });
+            if (result && result.success) {
+                authEmailClientLastSent.set(rateLimitKey, Date.now());
+                return { success: true };
+            }
+
+            if (result && result.code === 'EMAIL_NOT_CONFIGURED') {
+                const missing = Array.isArray(result.missing) && result.missing.length > 0
+                    ? ` Missing: ${result.missing.join(', ')}`
+                    : '';
+                return { success: false, message: `${t('authEmailServiceUnavailable')}${missing}` };
+            }
+            if (result && result.code === 'EMAIL_RATE_LIMITED') {
+                return { success: false, message: t('authEmailRateLimited') };
+            }
+            return { success: false, message: t('authEmailSendFailed') };
+        } catch (_) {
+            return { success: false, message: t('authEmailSendFailed') };
+        }
+    }
+
+    return { success: false, message: t('authEmailSendFailed') };
+}
+
+function clearSignupVerification() {
+    pendingSignupVerification = null;
+    const signupCodeInput = document.getElementById('signupVerificationCode');
+    if (signupCodeInput) signupCodeInput.value = '';
+}
+
+function clearResetVerification() {
+    pendingResetVerification = null;
+    const resetCodeInput = document.getElementById('resetCode');
+    if (resetCodeInput) resetCodeInput.value = '';
+}
+
+function resetForgotPinFields() {
+    const resetPhoneInput = document.getElementById('resetPhone');
+    const resetEmailInput = document.getElementById('resetEmail');
+    const resetNewPinInput = document.getElementById('resetNewPin');
+    const resetConfirmPinInput = document.getElementById('resetConfirmPin');
+    if (resetPhoneInput) resetPhoneInput.value = '';
+    if (resetEmailInput) resetEmailInput.value = '';
+    if (resetNewPinInput) resetNewPinInput.value = '';
+    if (resetConfirmPinInput) resetConfirmPinInput.value = '';
+    clearResetVerification();
+}
+
+function getAuthUsers() {
+    if (!appMeta || typeof appMeta !== 'object') appMeta = getDefaultAppMeta();
+    if (!Array.isArray(appMeta.authUsers)) appMeta.authUsers = [];
+    return appMeta.authUsers;
+}
+
+function setAuthHintText() {
+    const hint = document.getElementById('authHint');
+    if (!hint) return;
+    if (forgotPinVisible) {
+        hint.textContent = t('authHintReset');
+        return;
+    }
+    hint.textContent = authMode === 'signup' ? t('authHintSignup') : t('authHintLogin');
+}
+
+function toggleForgotPinPanel(show) {
+    forgotPinVisible = Boolean(show);
+
+    const panel = document.getElementById('forgotPinPanel');
+    const forgotPinBtn = document.getElementById('forgotPinBtn');
+    const loginBtn = document.getElementById('loginBtn');
+    const signupBtn = document.getElementById('signupBtn');
+    const loginTab = document.getElementById('authLoginTab');
+    const signupTab = document.getElementById('authSignupTab');
+    const resetPhoneInput = document.getElementById('resetPhone');
+    const resetEmailInput = document.getElementById('resetEmail');
+    const phoneInput = document.getElementById('phone');
+
+    if (panel) panel.style.display = forgotPinVisible ? 'block' : 'none';
+    if (loginBtn) loginBtn.style.display = (!forgotPinVisible && authMode === 'login') ? 'block' : 'none';
+    if (signupBtn) signupBtn.style.display = (!forgotPinVisible && authMode === 'signup') ? 'block' : 'none';
+    if (forgotPinBtn) forgotPinBtn.style.display = (!forgotPinVisible && authMode === 'login') ? 'inline-block' : 'none';
+    if (loginTab) loginTab.disabled = forgotPinVisible;
+    if (signupTab) signupTab.disabled = forgotPinVisible;
+
+    if (forgotPinVisible) {
+        const typedIdentifier = phoneInput ? String(phoneInput.value || '').trim() : '';
+        const matchedUser = findUserByLoginIdentifier(typedIdentifier, getAuthUsers());
+        if (resetPhoneInput) {
+            resetPhoneInput.value = normalizePhone(matchedUser?.phone || typedIdentifier || appMeta.lastLoginPhone || '');
+        }
+        if (resetEmailInput && matchedUser?.email) {
+            resetEmailInput.value = normalizeEmail(matchedUser.email);
+        }
+    } else {
+        resetForgotPinFields();
+    }
+
+    setAuthHintText();
+}
+
+function switchAuthMode(mode) {
+    authMode = mode === 'signup' ? 'signup' : 'login';
+    const isSignup = authMode === 'signup';
+
+    const signupNameGroup = document.getElementById('signupNameGroup');
+    const signupEmailGroup = document.getElementById('signupEmailGroup');
+    const confirmPinGroup = document.getElementById('confirmPinGroup');
+    const signupVerificationGroup = document.getElementById('signupVerificationGroup');
+    const loginBtn = document.getElementById('loginBtn');
+    const signupBtn = document.getElementById('signupBtn');
+    const loginTab = document.getElementById('authLoginTab');
+    const signupTab = document.getElementById('authSignupTab');
+    const forgotPinBtn = document.getElementById('forgotPinBtn');
+
+    if (forgotPinVisible) {
+        toggleForgotPinPanel(false);
+    }
+
+    if (signupNameGroup) signupNameGroup.style.display = isSignup ? 'block' : 'none';
+    if (signupEmailGroup) signupEmailGroup.style.display = isSignup ? 'block' : 'none';
+    if (confirmPinGroup) confirmPinGroup.style.display = isSignup ? 'block' : 'none';
+    if (signupVerificationGroup) signupVerificationGroup.style.display = isSignup ? 'block' : 'none';
+    if (loginBtn) loginBtn.style.display = isSignup ? 'none' : 'block';
+    if (signupBtn) signupBtn.style.display = isSignup ? 'block' : 'none';
+    if (forgotPinBtn) forgotPinBtn.style.display = isSignup ? 'none' : 'inline-block';
+    if (loginTab) loginTab.classList.toggle('active', !isSignup);
+    if (signupTab) signupTab.classList.toggle('active', isSignup);
+    if (loginTab) loginTab.disabled = false;
+    if (signupTab) signupTab.disabled = false;
+
+    setAuthHintText();
+}
+
+function updateActiveUserBadge() {
+    const badge = document.getElementById('activeUserBadge');
+    const accountNameEl = document.getElementById('activeAccountName');
+
+    if (!activeUser) {
+        if (badge) {
+            badge.style.display = 'none';
+            badge.textContent = '';
+        }
+        if (accountNameEl) accountNameEl.textContent = t('notLoggedIn');
+        return;
+    }
+
+    const userLabel = activeUser.name || activeUser.phone || 'User';
+    if (badge) {
+        badge.textContent = `${t('loggedInAs')}: ${userLabel}`;
+        badge.style.display = 'inline-flex';
+    }
+    if (accountNameEl) accountNameEl.textContent = userLabel;
+}
+
+function getOnboardingSteps() {
+    return [
+        { title: t('tutorial1Title'), text: t('tutorial1Text'), page: 'home' },
+        { title: t('tutorial2Title'), text: t('tutorial2Text'), page: 'addSale' },
+        { title: t('tutorial3Title'), text: t('tutorial3Text'), page: 'addSale' },
+        { title: t('tutorial4Title'), text: t('tutorial4Text'), page: 'customers' },
+        { title: t('tutorial5Title'), text: t('tutorial5Text'), page: 'reports' },
+        { title: t('tutorial6Title'), text: t('tutorial6Text'), page: 'settings' }
+    ];
+}
+
+function renderOnboardingStep() {
+    const overlay = document.getElementById('onboardingOverlay');
+    const titleEl = document.getElementById('onboardingTitle');
+    const textEl = document.getElementById('onboardingText');
+    const stepLabelEl = document.getElementById('onboardingStepLabel');
+    const prevBtn = document.getElementById('onboardingPrevBtn');
+    const nextBtn = document.getElementById('onboardingNextBtn');
+    if (!overlay || !titleEl || !textEl || !stepLabelEl || !nextBtn || !prevBtn) return;
+
+    const steps = getOnboardingSteps();
+    const step = steps[onboardingStepIndex];
+    if (!step) return;
+
+    if (step.page) showPage(step.page);
+
+    const label = t('tutorialStepLabel')
+        .replace('{current}', String(onboardingStepIndex + 1))
+        .replace('{total}', String(steps.length));
+    stepLabelEl.textContent = label;
+    titleEl.textContent = step.title;
+    textEl.textContent = step.text;
+    prevBtn.disabled = onboardingStepIndex === 0;
+    nextBtn.textContent = onboardingStepIndex === steps.length - 1 ? t('tutorialDone') : t('tutorialNext');
+}
+
+async function closeOnboarding(markDone = true) {
+    const overlay = document.getElementById('onboardingOverlay');
+    if (overlay) overlay.style.display = 'none';
+    onboardingVisible = false;
+    pendingOnboardingStart = false;
+    if (markDone && activeUser) {
+        settings.onboardingDone = true;
+        await optimizedSaveData();
+    }
+}
+
+function bindOnboardingControls() {
+    const skipBtn = document.getElementById('onboardingSkipBtn');
+    const prevBtn = document.getElementById('onboardingPrevBtn');
+    const nextBtn = document.getElementById('onboardingNextBtn');
+
+    if (skipBtn && !skipBtn.dataset.bound) {
+        skipBtn.addEventListener('click', () => { closeOnboarding(true); });
+        skipBtn.dataset.bound = '1';
+    }
+    if (prevBtn && !prevBtn.dataset.bound) {
+        prevBtn.addEventListener('click', () => {
+            if (onboardingStepIndex > 0) {
+                onboardingStepIndex -= 1;
+                renderOnboardingStep();
+            }
+        });
+        prevBtn.dataset.bound = '1';
+    }
+    if (nextBtn && !nextBtn.dataset.bound) {
+        nextBtn.addEventListener('click', async () => {
+            const steps = getOnboardingSteps();
+            if (onboardingStepIndex >= steps.length - 1) {
+                await closeOnboarding(true);
+                return;
+            }
+            onboardingStepIndex += 1;
+            renderOnboardingStep();
+        });
+        nextBtn.dataset.bound = '1';
+    }
+}
+
+function startOnboardingTutorial(force = false) {
+    if (!activeUser) {
+        alert('Please login first.');
+        return;
+    }
+    if (!force && settings.onboardingDone) return;
+
+    const overlay = document.getElementById('onboardingOverlay');
+    if (!overlay) return;
+    onboardingStepIndex = 0;
+    onboardingVisible = true;
+    overlay.style.display = 'flex';
+    bindOnboardingControls();
+    renderOnboardingStep();
+}
+
+async function handleLogin() {
+    const now = Date.now();
+    if (now < loginLockedUntil) {
+        alert(t('authTooManyAttempts'));
+        return;
+    }
+
+    const phoneInput = document.getElementById('phone');
+    const pinInput = document.getElementById('pin');
+    const loginIdentifier = (phoneInput ? phoneInput.value : '').trim();
+    const pin = (pinInput ? pinInput.value : '').trim();
+    const users = getAuthUsers();
+
+    const user = findUserByLoginIdentifier(loginIdentifier, users);
+
+    if (!user || String(user.pin) !== pin) {
+        failedLoginAttempts += 1;
+        if (failedLoginAttempts >= 5) {
+            failedLoginAttempts = 0;
+            loginLockedUntil = Date.now() + 60 * 1000;
+            alert(t('authTooManyAttempts'));
+        } else {
+            alert(t('authInvalidCredentials'));
+        }
+        return;
+    }
+
+    await completeLoginForUser(user);
+}
+
+async function sendSignupVerificationCode() {
+    const emailInput = document.getElementById('signupEmail');
+    const email = normalizeEmail(emailInput ? emailInput.value : '');
+    const users = getAuthUsers();
+    const sendSignupCodeBtn = document.getElementById('sendSignupCodeBtn');
+
+    if (!email) {
+        alert(t('authEmailRequired'));
+        return;
+    }
+    if (!isValidEmail(email)) {
+        alert(t('authEmailInvalid'));
+        return;
+    }
+    const exists = users.some((u) => normalizeEmail(u.email) === email);
+    if (exists) {
+        alert(t('authEmailExists'));
+        return;
+    }
+
+    const code = generateAuthCode();
+    if (sendSignupCodeBtn) sendSignupCodeBtn.disabled = true;
+    const emailSend = await sendAuthCodeByEmail(email, code, 'signup');
+    if (sendSignupCodeBtn) sendSignupCodeBtn.disabled = false;
+    if (!emailSend.success) {
+        alert(emailSend.message || t('authEmailSendFailed'));
+        return;
+    }
+
+    pendingSignupVerification = {
+        email,
+        code,
+        expiresAt: Date.now() + AUTH_VERIFICATION_TTL_MS
+    };
+
+    if (emailInput) emailInput.value = email;
+    showSuccessToast(emailSend.message || t('authCodeSent').replace('{email}', email));
+}
+
+async function handleSignup() {
+    const nameInput = document.getElementById('signupName');
+    const emailInput = document.getElementById('signupEmail');
+    const phoneInput = document.getElementById('phone');
+    const pinInput = document.getElementById('pin');
+    const confirmInput = document.getElementById('confirmPin');
+    const signupCodeInput = document.getElementById('signupVerificationCode');
+
+    const name = (nameInput ? nameInput.value : '').trim();
+    const email = normalizeEmail(emailInput ? emailInput.value : '');
+    const phone = normalizePhone(phoneInput ? phoneInput.value : '');
+    const pin = (pinInput ? pinInput.value : '').trim();
+    const confirmPin = (confirmInput ? confirmInput.value : '').trim();
+    const verificationCode = (signupCodeInput ? signupCodeInput.value : '').trim();
+
+    if (!name) {
+        alert(t('authNameRequired'));
+        return;
+    }
+    if (!email) {
+        alert(t('authEmailRequired'));
+        return;
+    }
+    if (!isValidEmail(email)) {
+        alert(t('authEmailInvalid'));
+        return;
+    }
+    if (phone.length < 10) {
+        alert(t('authPhoneRequired'));
+        return;
+    }
+    if (!/^\d{5}$/.test(pin)) {
+        alert(t('authPinRules'));
+        return;
+    }
+    if (pin !== confirmPin) {
+        alert(t('authPinMismatch'));
+        return;
+    }
+
+    const users = getAuthUsers();
+    const phoneExists = users.some((u) => normalizePhone(u.phone) === phone);
+    if (phoneExists) {
+        alert(t('authPhoneExists'));
+        return;
+    }
+    const emailExists = users.some((u) => normalizeEmail(u.email) === email);
+    if (emailExists) {
+        alert(t('authEmailExists'));
+        return;
+    }
+    if (!verificationCode) {
+        alert(t('authVerificationCodeRequired'));
+        return;
+    }
+    if (!AUTH_CODE_REGEX.test(verificationCode)) {
+        alert(t('authVerificationCodeInvalid'));
+        return;
+    }
+    if (!pendingSignupVerification || pendingSignupVerification.email !== email) {
+        alert(t('authVerificationSendFirst'));
+        return;
+    }
+    if (Date.now() > pendingSignupVerification.expiresAt) {
+        clearSignupVerification();
+        alert(t('authVerificationCodeExpired'));
+        return;
+    }
+    if (pendingSignupVerification.code !== verificationCode) {
+        alert(t('authVerificationCodeInvalid'));
+        return;
+    }
+
+    const createdUser = {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        name,
+        email,
+        phone,
+        pin,
+        role: users.length === 0 ? 'owner' : 'staff',
+        emailVerifiedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+    };
+    users.push(createdUser);
+
+    appMeta.authUsers = users;
+    appMeta.lastLoginPhone = phone;
+    await initializeUserStorage({ id: createdUser.id, phone });
+    await optimizedSaveData();
+
+    clearSignupVerification();
+    if (confirmInput) confirmInput.value = '';
+    if (pinInput) pinInput.value = '';
+    if (phoneInput) phoneInput.value = phone;
+    if (emailInput) emailInput.value = email;
+    showSuccessToast(t('authAccountCreated'));
+    switchAuthMode('login');
+}
+
+function openForgotPinPanel() {
+    switchAuthMode('login');
+    toggleForgotPinPanel(true);
+}
+
+async function handleGoogleLoginShortcut() {
+    switchAuthMode('login');
+    toggleForgotPinPanel(false);
+
+    const googleLoginBtn = document.getElementById('googleLoginBtn');
+    if (googleLoginBtn) googleLoginBtn.disabled = true;
+
+    try {
+        const clientId = ensureGoogleAuthClientId();
+        if (!clientId) {
+            if (googleLoginBtn) googleLoginBtn.disabled = false;
+            return;
+        }
+        const state = buildGoogleOAuthState();
+        try {
+            sessionStorage.setItem(GOOGLE_OAUTH_STATE_STORAGE_KEY, state);
+        } catch (_) {}
+
+        const authUrl = buildGoogleOAuthUrl(clientId, state);
+        window.location.assign(authUrl);
+    } catch (error) {
+        console.error('Google login failed:', error);
+        alert(t('googleLoginFailed'));
+        if (googleLoginBtn) googleLoginBtn.disabled = false;
+    }
+}
+
+async function sendResetVerificationCode() {
+    const resetPhoneInput = document.getElementById('resetPhone');
+    const resetEmailInput = document.getElementById('resetEmail');
+    const sendResetCodeBtn = document.getElementById('sendResetCodeBtn');
+    const phone = normalizePhone(resetPhoneInput ? resetPhoneInput.value : '');
+    const email = normalizeEmail(resetEmailInput ? resetEmailInput.value : '');
+    const users = getAuthUsers();
+
+    if (phone.length < 10) {
+        alert(t('authPhoneRequired'));
+        return;
+    }
+    if (!email) {
+        alert(t('authEmailRequired'));
+        return;
+    }
+    if (!isValidEmail(email)) {
+        alert(t('authEmailInvalid'));
+        return;
+    }
+
+    const user = users.find((u) => normalizePhone(u.phone) === phone);
+    if (!user) {
+        alert(t('authUserNotFound'));
+        return;
+    }
+    if (normalizeEmail(user.email) && normalizeEmail(user.email) !== email) {
+        alert(t('authResetEmailMismatch'));
+        return;
+    }
+    const emailTakenByOther = users.some((u) => u.id !== user.id && normalizeEmail(u.email) === email);
+    if (emailTakenByOther) {
+        alert(t('authEmailExists'));
+        return;
+    }
+
+    const code = generateAuthCode();
+    if (sendResetCodeBtn) sendResetCodeBtn.disabled = true;
+    const emailSend = await sendAuthCodeByEmail(email, code, 'reset');
+    if (sendResetCodeBtn) sendResetCodeBtn.disabled = false;
+    if (!emailSend.success) {
+        alert(emailSend.message || t('authEmailSendFailed'));
+        return;
+    }
+
+    pendingResetVerification = {
+        userId: user.id,
+        phone,
+        email,
+        code,
+        expiresAt: Date.now() + AUTH_VERIFICATION_TTL_MS
+    };
+    if (resetEmailInput) resetEmailInput.value = email;
+    showSuccessToast(emailSend.message || t('authCodeSent').replace('{email}', email));
+}
+
+async function handleResetPin() {
+    const resetPhoneInput = document.getElementById('resetPhone');
+    const resetEmailInput = document.getElementById('resetEmail');
+    const resetCodeInput = document.getElementById('resetCode');
+    const resetNewPinInput = document.getElementById('resetNewPin');
+    const resetConfirmPinInput = document.getElementById('resetConfirmPin');
+
+    const phone = normalizePhone(resetPhoneInput ? resetPhoneInput.value : '');
+    const email = normalizeEmail(resetEmailInput ? resetEmailInput.value : '');
+    const code = (resetCodeInput ? resetCodeInput.value : '').trim();
+    const newPin = (resetNewPinInput ? resetNewPinInput.value : '').trim();
+    const confirmPin = (resetConfirmPinInput ? resetConfirmPinInput.value : '').trim();
+    const users = getAuthUsers();
+
+    if (phone.length < 10) {
+        alert(t('authPhoneRequired'));
+        return;
+    }
+    if (!email) {
+        alert(t('authEmailRequired'));
+        return;
+    }
+    if (!isValidEmail(email)) {
+        alert(t('authEmailInvalid'));
+        return;
+    }
+    if (!/^\d{5}$/.test(newPin)) {
+        alert(t('authPinRules'));
+        return;
+    }
+    if (newPin !== confirmPin) {
+        alert(t('authPinMismatch'));
+        return;
+    }
+    if (!code) {
+        alert(t('authVerificationCodeRequired'));
+        return;
+    }
+    if (!AUTH_CODE_REGEX.test(code)) {
+        alert(t('authVerificationCodeInvalid'));
+        return;
+    }
+
+    const user = users.find((u) => normalizePhone(u.phone) === phone);
+    if (!user) {
+        alert(t('authUserNotFound'));
+        return;
+    }
+    if (normalizeEmail(user.email) && normalizeEmail(user.email) !== email) {
+        alert(t('authResetEmailMismatch'));
+        return;
+    }
+    const emailTakenByOther = users.some((u) => u.id !== user.id && normalizeEmail(u.email) === email);
+    if (emailTakenByOther) {
+        alert(t('authEmailExists'));
+        return;
+    }
+    if (
+        !pendingResetVerification ||
+        pendingResetVerification.userId !== user.id ||
+        pendingResetVerification.phone !== phone ||
+        pendingResetVerification.email !== email
+    ) {
+        alert(t('authVerificationSendFirst'));
+        return;
+    }
+    if (Date.now() > pendingResetVerification.expiresAt) {
+        clearResetVerification();
+        alert(t('authVerificationCodeExpired'));
+        return;
+    }
+    if (pendingResetVerification.code !== code) {
+        alert(t('authVerificationCodeInvalid'));
+        return;
+    }
+
+    user.pin = newPin;
+    user.email = normalizeEmail(user.email) || email;
+    user.emailVerifiedAt = new Date().toISOString();
+    appMeta.authUsers = users;
+    appMeta.lastLoginPhone = phone;
+    await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+
+    clearResetVerification();
+    toggleForgotPinPanel(false);
+
+    const phoneInput = document.getElementById('phone');
+    const pinInput = document.getElementById('pin');
+    if (phoneInput) phoneInput.value = phone;
+    if (pinInput) pinInput.value = '';
+    showSuccessToast(t('authPinResetSuccess'));
+}
+
+function initializeAuthUI() {
+    const users = getAuthUsers();
+    const loginTab = document.getElementById('authLoginTab');
+    const signupTab = document.getElementById('authSignupTab');
+    const phoneInput = document.getElementById('phone');
+    const loginBtn = document.getElementById('loginBtn');
+    const signupBtn = document.getElementById('signupBtn');
+    const pinInput = document.getElementById('pin');
+    const confirmInput = document.getElementById('confirmPin');
+    const signupEmailInput = document.getElementById('signupEmail');
+    const signupCodeInput = document.getElementById('signupVerificationCode');
+    const sendSignupCodeBtn = document.getElementById('sendSignupCodeBtn');
+    const forgotPinBtn = document.getElementById('forgotPinBtn');
+    const sendResetCodeBtn = document.getElementById('sendResetCodeBtn');
+    const resetPinBtn = document.getElementById('resetPinBtn');
+    const cancelResetPinBtn = document.getElementById('cancelResetPinBtn');
+    const resetConfirmPinInput = document.getElementById('resetConfirmPin');
+    const resetCodeInput = document.getElementById('resetCode');
+    const resetPhoneInput = document.getElementById('resetPhone');
+    const resetEmailInput = document.getElementById('resetEmail');
+
+    if (loginTab && !loginTab.dataset.bound) {
+        loginTab.addEventListener('click', () => switchAuthMode('login'));
+        loginTab.dataset.bound = '1';
+    }
+    if (signupTab && !signupTab.dataset.bound) {
+        signupTab.addEventListener('click', () => switchAuthMode('signup'));
+        signupTab.dataset.bound = '1';
+    }
+    if (loginBtn && !loginBtn.dataset.bound) {
+        loginBtn.addEventListener('click', handleLogin);
+        loginBtn.dataset.bound = '1';
+    }
+    if (signupBtn && !signupBtn.dataset.bound) {
+        signupBtn.addEventListener('click', handleSignup);
+        signupBtn.dataset.bound = '1';
+    }
+    if (sendSignupCodeBtn && !sendSignupCodeBtn.dataset.bound) {
+        sendSignupCodeBtn.addEventListener('click', sendSignupVerificationCode);
+        sendSignupCodeBtn.dataset.bound = '1';
+    }
+    if (forgotPinBtn && !forgotPinBtn.dataset.bound) {
+        forgotPinBtn.addEventListener('click', openForgotPinPanel);
+        forgotPinBtn.dataset.bound = '1';
+    }
+    if (sendResetCodeBtn && !sendResetCodeBtn.dataset.bound) {
+        sendResetCodeBtn.addEventListener('click', sendResetVerificationCode);
+        sendResetCodeBtn.dataset.bound = '1';
+    }
+    if (resetPinBtn && !resetPinBtn.dataset.bound) {
+        resetPinBtn.addEventListener('click', handleResetPin);
+        resetPinBtn.dataset.bound = '1';
+    }
+    if (cancelResetPinBtn && !cancelResetPinBtn.dataset.bound) {
+        cancelResetPinBtn.addEventListener('click', () => toggleForgotPinPanel(false));
+        cancelResetPinBtn.dataset.bound = '1';
+    }
+    if (pinInput && !pinInput.dataset.boundEnter) {
+        pinInput.addEventListener('keypress', (e) => {
+            if (e.key !== 'Enter') return;
+            if (authMode === 'signup') {
+                const confirmEl = document.getElementById('confirmPin');
+                if (confirmEl) confirmEl.focus();
+            } else {
+                handleLogin();
+            }
+        });
+        pinInput.dataset.boundEnter = '1';
+    }
+    if (confirmInput && !confirmInput.dataset.boundEnter) {
+        confirmInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSignup();
+        });
+        confirmInput.dataset.boundEnter = '1';
+    }
+    if (signupCodeInput && !signupCodeInput.dataset.boundEnter) {
+        signupCodeInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSignup();
+        });
+        signupCodeInput.dataset.boundEnter = '1';
+    }
+    if (resetCodeInput && !resetCodeInput.dataset.boundEnter) {
+        resetCodeInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleResetPin();
+        });
+        resetCodeInput.dataset.boundEnter = '1';
+    }
+    if (resetConfirmPinInput && !resetConfirmPinInput.dataset.boundEnter) {
+        resetConfirmPinInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleResetPin();
+        });
+        resetConfirmPinInput.dataset.boundEnter = '1';
+    }
+    if (signupEmailInput && !signupEmailInput.dataset.boundInput) {
+        signupEmailInput.addEventListener('input', () => {
+            if (!pendingSignupVerification) return;
+            if (pendingSignupVerification.email !== normalizeEmail(signupEmailInput.value)) {
+                clearSignupVerification();
+            }
+        });
+        signupEmailInput.dataset.boundInput = '1';
+    }
+    if (resetEmailInput && !resetEmailInput.dataset.boundInput) {
+        resetEmailInput.addEventListener('input', () => {
+            if (!pendingResetVerification) return;
+            if (pendingResetVerification.email !== normalizeEmail(resetEmailInput.value)) {
+                clearResetVerification();
+            }
+        });
+        resetEmailInput.dataset.boundInput = '1';
+    }
+    if (resetPhoneInput && !resetPhoneInput.dataset.boundInput) {
+        resetPhoneInput.addEventListener('input', () => {
+            if (!pendingResetVerification) return;
+            if (pendingResetVerification.phone !== normalizePhone(resetPhoneInput.value)) {
+                clearResetVerification();
+            }
+        });
+        resetPhoneInput.dataset.boundInput = '1';
+    }
+
+    if (phoneInput && appMeta.lastLoginPhone) {
+        phoneInput.value = String(appMeta.lastLoginPhone);
+    }
+
+    toggleForgotPinPanel(false);
+    switchAuthMode(users.length === 0 ? 'signup' : 'login');
+    updateActiveUserBadge();
+}
+
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log('Make A Way App Initializing...');
+    
+    // Load data first
+    await loadAllData();
+    setAppLanguage(settings.language || 'en');
+    configureDatePickers();
+    setRangeToThisMonth();
+    initializeAuthUI();
+    startRwandaClock();
+    bindOnboardingControls();
+    
+    const logoutBtn = document.getElementById('logoutBtn');
+    
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function() {
+            const userAtLogout = activeUser;
+            if (userAtLogout) {
+                const payload = buildCurrentSavePayload(userAtLogout);
+                const entries = Object.entries(payload).map(([name, value]) => ({ name, value }));
+                void saveManyNamedData(entries);
+                flushDataSyncOnExit(userAtLogout);
+            }
+            const appLetters = document.getElementById('appBgLetters');
+            if (appLetters) {
+                appLetters.style.display = 'none';
+                appLetters.style.opacity = '0';
+            }
+            
+            activeUser = null;
+            failedLoginAttempts = 0;
+            loginLockedUntil = 0;
+            pendingOnboardingStart = false;
+            updateActiveUserBadge();
+            closeOnboarding(false);
+
+            document.getElementById('app').style.display = 'none';
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('phone').value = appMeta.lastLoginPhone || '';
+            document.getElementById('pin').value = '';
+            const signupName = document.getElementById('signupName');
+            const signupEmail = document.getElementById('signupEmail');
+            const confirmPin = document.getElementById('confirmPin');
+            const resetPhone = document.getElementById('resetPhone');
+            const resetEmail = document.getElementById('resetEmail');
+            const resetNewPin = document.getElementById('resetNewPin');
+            const resetConfirmPin = document.getElementById('resetConfirmPin');
+            if (signupName) signupName.value = '';
+            if (signupEmail) signupEmail.value = '';
+            if (confirmPin) confirmPin.value = '';
+            if (resetPhone) resetPhone.value = '';
+            if (resetEmail) resetEmail.value = '';
+            if (resetNewPin) resetNewPin.value = '';
+            if (resetConfirmPin) resetConfirmPin.value = '';
+            clearSignupVerification();
+            clearResetVerification();
+            toggleForgotPinPanel(false);
+            sales = [];
+            customers = [];
+            clates = [];
+            drinks = [];
+            settings = getDefaultUserSettings();
+            cart = [];
+            switchAuthMode(getAuthUsers().length === 0 ? 'signup' : 'login');
+        });
+    }
+    
+    // Initialize the app
+    updateDrinkList();
+    updateQuickDrinkSelect();
+    updateCustomerDropdown();
+    updateCartDisplay();
+    updateHome();
+    
+    // Apply theme and settings
+    const currentTheme = settings.theme || 'light';
+    applyTheme(currentTheme);
+    
+    // Setup search listeners after DOM is ready
+    setTimeout(setupSearchListeners, 100);
+    
+    // Auto-save every 30 seconds
+    autoSaveInterval = setInterval(async () => {
+        await optimizedSaveData();
+    }, 30000);
+    
+    console.log('App initialized successfully');
+});
+
+// Setup search listeners - CRITICAL for search to work
+function setupSearchListeners() {
+    // Drink search
+    const drinkSearch = document.getElementById('drinkSearch');
+    if (drinkSearch) {
+        drinkSearch.removeEventListener('input', handleDrinkSearch);
+        drinkSearch.addEventListener('input', handleDrinkSearch);
+    }
+    
+    // Customer search
+    const customerSearch = document.querySelector('.search-input[placeholder*="Search customers"]');
+    if (customerSearch) {
+        customerSearch.removeEventListener('input', handleCustomerSearch);
+        customerSearch.addEventListener('input', handleCustomerSearch);
+    }
+    
+    // Deposit search
+    const depositSearch = document.getElementById('depositSearch');
+    if (depositSearch) {
+        depositSearch.removeEventListener('input', handleDepositSearch);
+        depositSearch.addEventListener('input', handleDepositSearch);
+    }
+    
+    // Sales history search
+    const salesSearch = document.getElementById('salesSearch');
+    if (salesSearch) {
+        salesSearch.removeEventListener('input', handleSalesSearch);
+        salesSearch.addEventListener('input', handleSalesSearch);
+    }
+}
+
+// Drink search handler
+function handleDrinkSearch(e) {
+    filterDrinks();
+}
+
+// Customer search handler
+function handleCustomerSearch(e) {
+    debouncedFilterCustomers(e.target.value);
+}
+
+// Deposit search handler
+function handleDepositSearch(e) {
+    debouncedFilterDeposits(e.target.value);
+}
+
+// Sales history search handler
+function handleSalesSearch(e) {
+    filterSalesHistory(e.target.value);
+}
+
+// Show app background letters after login
+function showAppBackgroundLetters() {
+    const appLetters = document.getElementById('appBgLetters');
+    if (appLetters) {
+        appLetters.style.display = 'flex';
+        
+        // Fade in effect
+        setTimeout(() => {
+            appLetters.style.transition = 'opacity 1s';
+            appLetters.style.opacity = '0.26';
+        }, 100);
+    }
+}
+
+// Welcome animation
+function showWelcomeAnimation() {
+    const overlay = document.getElementById('welcomeOverlay');
+    const completeLoginTransition = () => {
+        if (overlay) {
+            overlay.classList.remove('show');
+            overlay.style.display = 'none';
+        }
+        const loginScreen = document.getElementById('loginScreen');
+        const app = document.getElementById('app');
+        if (loginScreen) loginScreen.style.display = 'none';
+        if (app) app.style.display = 'block';
+        showAppBackgroundLetters();
+
+        // Apply saved theme and language
+        const savedTheme = settings.theme || 'light';
+        const savedLanguage = settings.language || 'en';
+        setAppLanguage(savedLanguage);
+        applyTheme(savedTheme);
+        updateActiveUserBadge();
+
+        showPage('home');
+        if (pendingOnboardingStart) {
+            setTimeout(() => startOnboardingTutorial(false), 300);
+        }
+    };
+
+    if (!overlay) {
+        completeLoginTransition();
+        return;
+    }
+
+    // Re-trigger the animation on every login and randomize angle a bit.
+    const randomAngle = 116 + Math.floor(Math.random() * 56);
+    const darkActive = (settings.theme || 'light') === 'dark' || document.body.classList.contains('dark-mode');
+    overlay.classList.toggle('loader-dark', darkActive);
+    overlay.style.setProperty('--maw-loader-angle', `${randomAngle}deg`);
+    overlay.classList.remove('show');
+    overlay.style.display = 'flex';
+    void overlay.offsetWidth;
+    overlay.classList.add('show');
+
+    // Hide overlay and show app after animation finishes.
+    setTimeout(() => {
+        completeLoginTransition();
+    }, 1750);
+}
+
+const DB_NAME = 'makeaway_db';
+const DB_STORE = 'app_state';
+
+function getTodayISODate() {
+    return new Date().toISOString().split('T')[0];
+}
+
+function getDayRange(dateValue) {
+    const dayStart = new Date(dateValue);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+    return { dayStart, dayEnd };
+}
+
+function getClockLocale() {
+    const localeMap = {
+        en: 'en-US',
+        rw: 'rw-RW',
+        fr: 'fr-FR'
+    };
+    return localeMap[currentLanguage] || 'en-US';
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs = 6000) {
+    if (typeof fetch !== 'function') return null;
+    const hasAbort = typeof AbortController !== 'undefined';
+    const controller = hasAbort ? new AbortController() : null;
+    let timeoutHandle = null;
+
+    try {
+        if (controller) {
+            timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+        }
+        const response = await fetch(url, {
+            method: 'GET',
+            cache: 'no-store',
+            signal: controller ? controller.signal : undefined
+        });
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        return null;
+    } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
+}
+
+function parseRwandaEpochMs(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+
+    if (Number.isFinite(payload.unixtime)) {
+        return Number(payload.unixtime) * 1000;
+    }
+
+    if (typeof payload.datetime === 'string') {
+        const parsed = Date.parse(payload.datetime);
+        if (Number.isFinite(parsed)) return parsed;
+    }
+
+    if (typeof payload.dateTime === 'string') {
+        const hasOffset = /(?:Z|[+-]\d{2}:\d{2})$/.test(payload.dateTime);
+        const normalized = hasOffset ? payload.dateTime : `${payload.dateTime}+02:00`;
+        const parsed = Date.parse(normalized);
+        if (Number.isFinite(parsed)) return parsed;
+    }
+
+    const year = Number(payload.year);
+    const month = Number(payload.month);
+    const day = Number(payload.day);
+    const hour = Number(payload.hour);
+    const minute = Number(payload.minute);
+    const seconds = Number(payload.seconds);
+    const milliSeconds = Number(payload.milliSeconds || 0);
+    if (
+        Number.isFinite(year) &&
+        Number.isFinite(month) &&
+        Number.isFinite(day) &&
+        Number.isFinite(hour) &&
+        Number.isFinite(minute) &&
+        Number.isFinite(seconds)
+    ) {
+        const iso = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(Math.max(0, milliSeconds)).padStart(3, '0')}+02:00`;
+        const parsed = Date.parse(iso);
+        if (Number.isFinite(parsed)) return parsed;
+    }
+
+    return null;
+}
+
+async function fetchRwandaEpochMs() {
+    const sources = [
+        'https://timeapi.io/api/Time/current/zone?timeZone=Africa/Kigali',
+        'https://worldtimeapi.org/api/timezone/Africa/Kigali'
+    ];
+
+    for (const url of sources) {
+        const payload = await fetchJsonWithTimeout(url, 6000);
+        const epochMs = parseRwandaEpochMs(payload);
+        if (Number.isFinite(epochMs)) return epochMs;
+    }
+
+    return null;
+}
+
+function getSyncedRwandaDate() {
+    if (!Number.isFinite(rwandaClockBaseEpochMs) || !Number.isFinite(rwandaClockBasePerfMs)) {
+        return null;
+    }
+    const elapsedMs = performance.now() - rwandaClockBasePerfMs;
+    return new Date(rwandaClockBaseEpochMs + elapsedMs);
+}
+
+async function syncRwandaClockFromServer() {
+    const epochMs = await fetchRwandaEpochMs();
+    if (!Number.isFinite(epochMs)) return false;
+
+    rwandaClockBaseEpochMs = epochMs;
+    rwandaClockBasePerfMs = performance.now();
+    return true;
+}
+
+function updateRwandaClock() {
+    const dayEl = document.getElementById('rwClockDay');
+    const dateEl = document.getElementById('rwClockDate');
+    const timeEl = document.getElementById('rwClockTime');
+    if (!dayEl || !dateEl || !timeEl) return;
+
+    const now = getSyncedRwandaDate();
+    if (!now) {
+        dayEl.textContent = 'Syncing';
+        dateEl.textContent = 'Rwanda time';
+        timeEl.textContent = '--:--:--';
+        return;
+    }
+
+    const locale = getClockLocale();
+
+    const dayText = new Intl.DateTimeFormat(locale, {
+        weekday: 'long',
+        timeZone: RWANDA_TIME_ZONE
+    }).format(now);
+
+    const dateText = new Intl.DateTimeFormat(locale, {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        timeZone: RWANDA_TIME_ZONE
+    }).format(now);
+
+    const timeText = new Intl.DateTimeFormat(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZone: RWANDA_TIME_ZONE
+    }).format(now);
+
+    dayEl.textContent = dayText;
+    dateEl.textContent = dateText;
+    timeEl.textContent = timeText;
+}
+
+function startRwandaClock() {
+    if (rwandaClockInterval) {
+        clearInterval(rwandaClockInterval);
+        rwandaClockInterval = null;
+    }
+    if (rwandaClockSyncInterval) {
+        clearInterval(rwandaClockSyncInterval);
+        rwandaClockSyncInterval = null;
+    }
+
+    updateRwandaClock();
+
+    const syncAndRender = async () => {
+        const synced = await syncRwandaClockFromServer();
+        if (!synced) return;
+        updateRwandaClock();
+    };
+
+    void syncAndRender();
+    rwandaClockInterval = setInterval(updateRwandaClock, 1000);
+    rwandaClockSyncInterval = setInterval(() => {
+        void syncAndRender();
+    }, RWANDA_TIME_SYNC_INTERVAL_MS);
+}
+
+function configureDatePickers() {
+    const todayIso = getTodayISODate();
+    const pickerIds = ['salesHistoryDate', 'dailyReportDate', 'rangeStartDate', 'rangeEndDate'];
+
+    pickerIds.forEach((id) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+
+        input.max = todayIso;
+        input.setAttribute('inputmode', 'none');
+
+        if (!input.dataset.pickerBound) {
+            input.addEventListener('keydown', (e) => e.preventDefault());
+            input.addEventListener('paste', (e) => e.preventDefault());
+            input.addEventListener('drop', (e) => e.preventDefault());
+            input.addEventListener('focus', () => {
+                if (typeof input.showPicker === 'function') input.showPicker();
+            });
+            input.addEventListener('click', () => {
+                if (typeof input.showPicker === 'function') input.showPicker();
+            });
+            input.dataset.pickerBound = '1';
+        }
+    });
+
+    const monthInput = document.getElementById('rangeMonth');
+    if (monthInput) {
+        monthInput.max = todayIso.slice(0, 7);
+        if (!monthInput.value) monthInput.value = todayIso.slice(0, 7);
+        monthInput.setAttribute('inputmode', 'none');
+        if (!monthInput.dataset.pickerBound) {
+            monthInput.addEventListener('keydown', (e) => e.preventDefault());
+            monthInput.addEventListener('paste', (e) => e.preventDefault());
+            monthInput.addEventListener('drop', (e) => e.preventDefault());
+            monthInput.addEventListener('focus', () => {
+                if (typeof monthInput.showPicker === 'function') monthInput.showPicker();
+            });
+            monthInput.addEventListener('click', () => {
+                if (typeof monthInput.showPicker === 'function') monthInput.showPicker();
+            });
+            monthInput.dataset.pickerBound = '1';
+        }
+    }
+}
+
+function openAppDB() {
+    return new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+            reject(new Error('IndexedDB not supported'));
+            return;
+        }
+
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(DB_STORE)) {
+                db.createObjectStore(DB_STORE);
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function saveToIndexedDB() {
+    const db = await openAppDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        const store = tx.objectStore(DB_STORE);
+        store.put(sales, 'sales');
+        store.put(customers, 'customers');
+        store.put(clates, 'clates');
+        store.put(drinks, 'drinks');
+        store.put(settings, 'settings');
+        tx.oncomplete = () => {
+            db.close();
+            resolve(true);
+        };
+        tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+        };
+    });
+}
+
+async function loadFromIndexedDB() {
+    try {
+        const db = await openAppDB();
+        const readKey = (key) => new Promise((resolve) => {
+            const tx = db.transaction(DB_STORE, 'readonly');
+            const req = tx.objectStore(DB_STORE).get(key);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        });
+
+        const dbSales = await readKey('sales');
+        const dbCustomers = await readKey('customers');
+        const dbClates = await readKey('clates');
+        const dbDrinks = await readKey('drinks');
+        const dbSettings = await readKey('settings');
+        db.close();
+
+        if (!dbSales && !dbCustomers && !dbClates && !dbDrinks && !dbSettings) {
+            return false;
+        }
+
+        sales = Array.isArray(dbSales) ? dbSales : [];
+        customers = Array.isArray(dbCustomers) ? dbCustomers : [];
+        clates = Array.isArray(dbClates) ? dbClates : [];
+        drinks = Array.isArray(dbDrinks) ? dbDrinks : defaultDrinks;
+        settings = (dbSettings && typeof dbSettings === 'object') ? dbSettings : {};
+        normalizeDrinksData();
+        return true;
+    } catch (error) {
+        console.warn('IndexedDB load failed:', error);
+        return false;
+    }
+}
+
+// ================= PAGE NAVIGATION =================
+function showPage(pageName) {
+    // Hide all pages
+    document.querySelectorAll('.page').forEach(page => {
+        page.style.display = 'none';
+    });
+    
+    // Show selected page
+    const page = document.getElementById(pageName);
+    if (page) {
+        page.style.display = 'block';
+    }
+    
+    // Update nav buttons
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        const isActive = btn.dataset.page === pageName;
+        btn.classList.toggle('active', isActive);
+        if (isActive) {
+            btn.setAttribute('aria-current', 'page');
+        } else {
+            btn.removeAttribute('aria-current');
+        }
+    });
+    const topSettingsBtn = document.getElementById('topSettingsBtn');
+    if (topSettingsBtn) {
+        const isSettingsPage = pageName === 'settings';
+        topSettingsBtn.classList.toggle('active', isSettingsPage);
+        topSettingsBtn.setAttribute('aria-pressed', isSettingsPage ? 'true' : 'false');
+    }
+    
+    // Load page-specific data
+    switch(pageName) {
+        case 'home':
+            updateHome();
+            break;
+        case 'addSale':
+            updateDrinkList();
+            updateQuickDrinkSelect();
+            updateCustomerDropdown();
+            updateCartDisplay();
+            break;
+        case 'customers':
+            displayCustomers();
+            break;
+        case 'clate':
+            displayKosiyo();
+            break;
+        case 'salesHistory':
+            displaySalesHistory();
+            break;
+        case 'reports':
+            showDailyReport();
+            addExportImportButtons();
+            if (!document.getElementById('rangeStartDate')?.value || !document.getElementById('rangeEndDate')?.value) {
+                setRangeToThisMonth();
+            }
+            break;
+        case 'settings':
+            loadSettings();
+            break;
+    }
+    
+    // Re-setup search listeners when switching pages
+    setTimeout(setupSearchListeners, 50);
+    configureDatePickers();
+}
+
+// Add export/import buttons to reports page
+function addExportImportButtons() {
+    const reportControls = document.querySelector('.report-controls');
+    if (!reportControls) return;
+    
+    // Remove existing data management buttons
+    const existingButtons = reportControls.querySelectorAll('.data-mgmt-btn');
+    existingButtons.forEach(btn => btn.remove());
+    
+    // PDF Export button for current report
+    const pdfBtn = document.createElement('button');
+    pdfBtn.className = 'report-btn data-mgmt-btn';
+    pdfBtn.textContent = 'Export PDF';
+    pdfBtn.onclick = function() {
+        const reportType = getCurrentReportType();
+        console.log('Exporting report type:', reportType);
+        exportReportToPDF(reportType);
+    };
+    
+    reportControls.appendChild(pdfBtn);
+}
+
+// Helper function to determine current report type
+function getCurrentReportType() {
+    const reportOutput = document.getElementById('reportOutput');
+    if (!reportOutput) return 'full';
+    
+    const text = reportOutput.innerText;
+    if (text.includes('Daily Report')) return 'daily';
+    if (text.includes('Weekly Report')) return 'weekly';
+    if (text.includes('Monthly Report')) return 'monthly';
+    if (text.includes('Annual Report')) return 'annual';
+    return 'full';
+}
+
+// ================= ADD SALE FUNCTIONS =================
+function updateDrinkList() {
+    const drinkList = document.getElementById('drinkList');
+    if (!drinkList) return;
+    
+    clearElement(drinkList);
+    
+    if (drinks.length === 0) {
+        drinkList.innerHTML = '<div class="no-data">No drinks saved yet. Add one below!</div>';
+        return;
+    }
+    
+    drinks.forEach((drink, index) => {
+        const drinkProfit = getDrinkProfitPerCaseByName(drink.name);
+        const item = document.createElement('div');
+        item.className = 'drink-item';
+        item.innerHTML = `
+            <div>
+                <strong>${drink.name}</strong>
+                <div class="drink-meta">
+                    <span class="drink-price">RWF ${drink.price.toLocaleString()}</span>
+                    <span>Profit/Case: RWF ${drinkProfit.toLocaleString()}</span>
+                </div>
+            </div>
+            <div class="drink-actions">
+                <button class="select-drink-btn" onclick="selectDrink(${index})">Select</button>
+                <button onclick="deleteDrink(${index})" class="delete-drink-btn">🗑️</button>
+            </div>
+        `;
+        drinkList.appendChild(item);
+    });
+}
+
+function filterDrinks() {
+    const search = document.getElementById('drinkSearch').value.toLowerCase();
+    const drinkList = document.getElementById('drinkList');
+    
+    if (!drinkList) return;
+    
+    clearElement(drinkList);
+    
+    const filteredDrinks = drinks.filter(drink => 
+        drink.name.toLowerCase().includes(search)
+    );
+    
+    if (filteredDrinks.length === 0) {
+        drinkList.innerHTML = '<div class="no-data">No drinks found</div>';
+        return;
+    }
+    
+    filteredDrinks.forEach((drink, filteredIndex) => {
+        // Find original index
+        const originalIndex = drinks.findIndex(d => d.name === drink.name);
+        
+        const item = document.createElement('div');
+        item.className = 'drink-item';
+        const drinkProfit = getDrinkProfitPerCaseByName(drink.name);
+        item.innerHTML = `
+            <div>
+                <strong>${drink.name}</strong>
+                <div class="drink-meta">
+                    <span class="drink-price">RWF ${drink.price.toLocaleString()}</span>
+                    <span>Profit/Case: RWF ${drinkProfit.toLocaleString()}</span>
+                </div>
+            </div>
+            <div class="drink-actions">
+                <button class="select-drink-btn" onclick="selectDrink(${originalIndex})">Select</button>
+                <button onclick="deleteDrink(${originalIndex})" class="delete-drink-btn">🗑️</button>
+            </div>
+        `;
+        drinkList.appendChild(item);
+    });
+}
+
+function selectDrink(index) {
+    const drink = drinks[index];
+    const select = document.getElementById('quickDrinkSelect');
+    if (select) {
+        select.value = index;
+    }
+    const qtyInput = document.getElementById('quickQuantity');
+    if (qtyInput) {
+        qtyInput.value = '1';
+    }
+}
+
+// ================= NEW CART FUNCTIONS =================
+function updateQuickDrinkSelect() {
+    const select = document.getElementById('quickDrinkSelect');
+    if (!select) return;
+    
+    select.innerHTML = `<option value="">${t('chooseDrink')}</option>`;
+    drinks.forEach((drink, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = `${drink.name} - RWF ${drink.price.toLocaleString()}`;
+        select.appendChild(option);
+    });
+}
+
+function addToCart() {
+    const drinkIndex = document.getElementById('quickDrinkSelect').value;
+    const quantity = parseInt(document.getElementById('quickQuantity').value) || 1;
+    
+    if (!drinkIndex || drinkIndex === '') {
+        alert('Please select a drink');
+        return;
+    }
+    
+    if (quantity < 1) {
+        alert('Please enter a valid quantity');
+        return;
+    }
+    
+    const drink = drinks[parseInt(drinkIndex)];
+    
+    // Check if drink already in cart
+    const existingItem = cart.findIndex(item => item.drinkIndex === parseInt(drinkIndex));
+    
+    if (existingItem >= 0) {
+        cart[existingItem].quantity += quantity;
+    } else {
+        cart.push({
+            drinkIndex: parseInt(drinkIndex),
+            drinkName: drink.name,
+            price: drink.price,
+            profitPerCase: getDrinkProfitPerCaseByName(drink.name),
+            quantity: quantity
+        });
+    }
+    
+    updateCartDisplay();
+    document.getElementById('quickDrinkSelect').value = '';
+    document.getElementById('quickQuantity').value = '1';
+    updateHome();
+}
+
+function updateCartDisplay() {
+    const cartContainer = document.getElementById('cartItems');
+    if (!cartContainer) return;
+    
+    clearElement(cartContainer);
+    
+    if (cart.length === 0) {
+        cartContainer.innerHTML = `<div class="empty-cart-message">${t('noItemsYet')}</div>`;
+        updateCartTotal();
+        return;
+    }
+    
+    cart.forEach((item, index) => {
+        const itemTotal = item.price * item.quantity;
+        const cartItem = document.createElement('div');
+        cartItem.className = 'cart-item';
+        cartItem.innerHTML = `
+            <div class="cart-item-info">
+                <div class="cart-item-name">${item.drinkName}</div>
+                <div class="cart-item-details">RWF ${item.price.toLocaleString()} each</div>
+            </div>
+            <div class="cart-item-qty">
+                <input type="number" value="${item.quantity}" min="1" onchange="updateCartItemQty(${index}, this.value)">
+            </div>
+            <div style="text-align: right; min-width: 120px;">
+                <div style="font-weight: bold; color: #2575fc;">RWF ${itemTotal.toLocaleString()}</div>
+            </div>
+            <div class="cart-item-actions">
+                <button onclick="removeFromCart(${index})">${t('remove')}</button>
+            </div>
+        `;
+        cartContainer.appendChild(cartItem);
+    });
+    
+    updateCartTotal();
+}
+
+function updateCartItemQty(index, newQty) {
+    const qty = parseInt(newQty) || 1;
+    if (qty < 1) {
+        alert('Quantity must be at least 1');
+        return;
+    }
+    cart[index].quantity = qty;
+    updateCartDisplay();
+}
+
+function removeFromCart(index) {
+    cart.splice(index, 1);
+    updateCartDisplay();
+}
+
+function clearCart() {
+    if (confirm('Clear all items from cart?')) {
+        cart = [];
+        updateCartDisplay();
+        const select = document.getElementById('quickDrinkSelect');
+        if (select) select.value = '';
+        const qtyInput = document.getElementById('quickQuantity');
+        if (qtyInput) qtyInput.value = '1';
+        showSuccessToast('Cart cleared.');
+    }
+}
+
+function updateCartTotal() {
+    let total = 0;
+    cart.forEach(item => {
+        total += item.price * item.quantity;
+    });
+    const totalElement = document.getElementById('saleTotal');
+    if (totalElement) {
+        totalElement.textContent = `RWF ${total.toLocaleString()}`;
+    }
+}
+
+async function confirmSale() {
+    if (cart.length === 0) {
+        alert('Please add items to cart first');
+        return;
+    }
+    
+    if (currentSaleType === 'credit' && selectedCustomerId === null) {
+        alert('Please select a customer for credit sale');
+        return;
+    }
+    
+    let totalAmount = 0;
+    const saleItems = [];
+    
+    // Create sale entries for each item
+    cart.forEach(item => {
+        const itemTotal = item.price * item.quantity;
+        totalAmount += itemTotal;
+        
+        saleItems.push({
+            drinkName: item.drinkName,
+            quantity: item.quantity,
+            price: item.price,
+            subtotal: itemTotal
+        });
+        
+        const sale = {
+            id: Date.now() + Math.random(),
+            drinkName: item.drinkName,
+            quantity: item.quantity,
+            price: item.price,
+            profitPerCase: Number(item.profitPerCase || getDrinkProfitPerCaseByName(item.drinkName)),
+            total: itemTotal,
+            type: currentSaleType,
+            customerId: currentSaleType === 'credit' ? selectedCustomerId : null,
+            date: new Date().toISOString()
+        };
+        
+        sales.push(sale);
+    });
+    
+    // Update customer debt if credit sale
+    if (currentSaleType === 'credit' && selectedCustomerId !== null && customers[selectedCustomerId]) {
+        customers[selectedCustomerId].owing = (customers[selectedCustomerId].owing || 0) + totalAmount;
+    }
+    
+    await optimizedSaveData();
+    
+    const toastSummary = currentSaleType === 'credit'
+        ? (() => {
+            const customerName = selectedCustomerId !== null && customers[selectedCustomerId]
+                ? customers[selectedCustomerId].name
+                : 'Unknown';
+            return `Sale confirmed. Total: RWF ${totalAmount.toLocaleString()} (added to ${customerName}'s debt).`;
+        })()
+        : `Sale confirmed. Total: RWF ${totalAmount.toLocaleString()} (paid in cash).`;
+    showSuccessToast(toastSummary);
+    
+    // Reset form
+    cart = [];
+    const saleTypeSelect = document.getElementById('saleType');
+    if (saleTypeSelect) saleTypeSelect.value = 'normal';
+    const customerSelectContainer = document.getElementById('customerSelectContainer');
+    if (customerSelectContainer) customerSelectContainer.style.display = 'none';
+    const customerSelect = document.getElementById('customerSelect');
+    if (customerSelect) customerSelect.value = '';
+    selectedCustomerId = null;
+    currentSaleType = 'normal';
+    updateCartDisplay();
+    updateQuickDrinkSelect();
+    updateHome();
+}
+
+async function deleteDrink(index) {
+    const drink = drinks[index];
+    
+    if (!confirm(`Delete "${drink.name}" from drink list?`)) {
+        return;
+    }
+    
+    drinks.splice(index, 1);
+    await optimizedSaveData();
+    updateDrinkList();
+    updateQuickDrinkSelect();
+    renderDrinkProfitEditor();
+    
+    showSuccessToast(`Drink deleted: ${drink.name}`);
+}
+
+function saveNewDrink() {
+    const name = document.getElementById('newDrinkName').value.trim();
+    const price = parseFloat(document.getElementById('newDrinkPrice').value);
+    const profitPerCaseInput = document.getElementById('newDrinkProfitPerCase');
+    const rawProfitValue = profitPerCaseInput ? String(profitPerCaseInput.value || '').trim() : '';
+    const parsedProfitValue = rawProfitValue === '' ? NaN : parseFloat(rawProfitValue);
+    
+    if (!name || isNaN(price) || price <= 0) {
+        alert('Please enter valid drink name and price');
+        return;
+    }
+    if (rawProfitValue !== '' && (!Number.isFinite(parsedProfitValue) || parsedProfitValue < 0)) {
+        alert(t('profitPerCaseError'));
+        return;
+    }
+    const defaultProfit = getDefaultDrinkProfitPerCase();
+    const finalProfitPerCase = rawProfitValue === '' ? defaultProfit : parsedProfitValue;
+    
+    // Check if drink exists
+    const existingIndex = drinks.findIndex(d => d.name.toLowerCase() === name.toLowerCase());
+    if (existingIndex >= 0) {
+        drinks[existingIndex].price = price;
+        drinks[existingIndex].profitPerCase = finalProfitPerCase;
+    } else {
+        drinks.push({ name, price, profitPerCase: finalProfitPerCase });
+    }
+    
+    optimizedSaveData();
+    updateDrinkList();
+    updateQuickDrinkSelect();
+    renderDrinkProfitEditor();
+    document.getElementById('newDrinkName').value = '';
+    document.getElementById('newDrinkPrice').value = '';
+    if (profitPerCaseInput) profitPerCaseInput.value = '';
+    
+    showSuccessToast(`Drink saved: ${name} - RWF ${price.toLocaleString()} (Profit/Case: RWF ${Number(finalProfitPerCase).toLocaleString()})`);
+}
+
+function changeQty(change) {
+    saleQty += change;
+    if (saleQty < 1) saleQty = 1;
+    const qtyElement = document.getElementById('qty');
+    if (qtyElement) qtyElement.textContent = saleQty;
+    updateSaleTotal();
+}
+
+function updateSaleTotal() {
+    const price = parseFloat(document.getElementById('selectedDrinkPrice').value) || 0;
+    const total = price * saleQty;
+    const totalElement = document.getElementById('saleTotal');
+    if (totalElement) {
+        totalElement.textContent = `RWF ${total.toLocaleString()}`;
+    }
+}
+
+function changeSaleType(type) {
+    currentSaleType = type;
+    const container = document.getElementById('customerSelectContainer');
+    if (container) {
+        container.style.display = type === 'credit' ? 'block' : 'none';
+    }
+    
+    if (type === 'credit') {
+        updateCustomerDropdown();
+    } else {
+        selectedCustomerId = null;
+    }
+}
+
+function updateCustomerDropdown() {
+    const select = document.getElementById('customerSelect');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">Select Customer</option>';
+    
+    customers.forEach((customer, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = `${customer.name} ${customer.owing > 0 ? `(Owes: RWF ${customer.owing.toLocaleString()})` : ''}`;
+        select.appendChild(option);
+    });
+    
+    select.onchange = function() {
+        selectedCustomerId = this.value ? parseInt(this.value) : null;
+    };
+}
+
+// ================= FORM MANAGEMENT FUNCTIONS =================
+function openCustomerForm() {
+    // Clear form
+    const nameInput = document.getElementById('customerName');
+    const phoneInput = document.getElementById('customerPhone');
+    const locationInput = document.getElementById('customerLocation');
+    const typeSelect = document.getElementById('customerType');
+    const notesInput = document.getElementById('customerNotes');
+    const debtInput = document.getElementById('customerDebt');
+    
+    if (nameInput) nameInput.value = '';
+    if (phoneInput) phoneInput.value = '';
+    if (locationInput) locationInput.value = '';
+    if (typeSelect) typeSelect.value = 'regular';
+    if (notesInput) notesInput.value = '';
+    if (debtInput) debtInput.value = '0';
+    
+    const overlay = document.getElementById('customerFormOverlay');
+    if (overlay) overlay.style.display = 'block';
+}
+
+function closeCustomerForm() {
+    const overlay = document.getElementById('customerFormOverlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+function openDepositForm() {
+    const nameInput = document.getElementById('depositName');
+    const amountInput = document.getElementById('depositAmount');
+    const descInput = document.getElementById('depositDescription');
+    
+    if (nameInput) nameInput.value = '';
+    if (amountInput) amountInput.value = '';
+    if (descInput) descInput.value = 'Bottle deposit';
+    
+    const overlay = document.getElementById('depositFormOverlay');
+    if (overlay) overlay.style.display = 'block';
+}
+
+function closeDepositForm() {
+    const overlay = document.getElementById('depositFormOverlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+function openAddDebtForm(index) {
+    currentCustomerIndex = index;
+    debtAction = 'add';
+    const title = document.getElementById('debtFormTitle');
+    const message = document.getElementById('debtMessage');
+    const amountInput = document.getElementById('debtAmount');
+    
+    if (title) title.textContent = 'Add Debt';
+    if (message) message.textContent = `Add debt amount for ${customers[index].name} (RWF):`;
+    if (amountInput) {
+        amountInput.value = '';
+        amountInput.readOnly = false;
+    }
+    
+    const overlay = document.getElementById('debtFormOverlay');
+    if (overlay) overlay.style.display = 'block';
+}
+
+function openReduceDebtForm(index) {
+    currentCustomerIndex = index;
+    debtAction = 'reduce';
+    const title = document.getElementById('debtFormTitle');
+    const message = document.getElementById('debtMessage');
+    const amountInput = document.getElementById('debtAmount');
+    
+    if (title) title.textContent = 'Reduce Debt';
+    if (message) message.textContent = `Reduce debt amount for ${customers[index].name} (RWF). Current: RWF ${customers[index].owing}`;
+    if (amountInput) {
+        amountInput.value = '';
+        amountInput.readOnly = false;
+    }
+    
+    const overlay = document.getElementById('debtFormOverlay');
+    if (overlay) overlay.style.display = 'block';
+}
+
+function openClearDebtForm(index) {
+    currentCustomerIndex = index;
+    debtAction = 'clear';
+    const title = document.getElementById('debtFormTitle');
+    const message = document.getElementById('debtMessage');
+    const amountInput = document.getElementById('debtAmount');
+    
+    if (title) title.textContent = 'Clear Debt';
+    if (message) message.textContent = `Clear all debt for ${customers[index].name}? Current: RWF ${customers[index].owing}`;
+    if (amountInput) {
+        amountInput.value = customers[index].owing;
+        amountInput.readOnly = true;
+    }
+    
+    const overlay = document.getElementById('debtFormOverlay');
+    if (overlay) overlay.style.display = 'block';
+}
+
+function closeDebtForm() {
+    const overlay = document.getElementById('debtFormOverlay');
+    if (overlay) overlay.style.display = 'none';
+    const amountInput = document.getElementById('debtAmount');
+    if (amountInput) amountInput.readOnly = false;
+}
+
+function appendDebtHistory(customer, type, amount, note = '') {
+    if (!customer) return;
+    if (!Array.isArray(customer.debtHistory)) customer.debtHistory = [];
+    customer.debtHistory.push({
+        id: `${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+        type,
+        amount: Number(amount) || 0,
+        note,
+        date: new Date().toISOString()
+    });
+}
+
+async function saveCustomer() {
+    const name = document.getElementById('customerName').value.trim();
+    const phone = document.getElementById('customerPhone').value.trim();
+    const location = document.getElementById('customerLocation').value.trim();
+    const type = document.getElementById('customerType').value;
+    const notes = document.getElementById('customerNotes').value.trim();
+    const debt = parseFloat(document.getElementById('customerDebt').value) || 0;
+    
+    if (!name) {
+        alert('Please enter customer name');
+        return;
+    }
+    
+    const customer = {
+        id: Date.now(),
+        name,
+        phone,
+        location,
+        type,
+        notes,
+        owing: debt,
+        debtHistory: debt > 0 ? [{
+            id: `${Date.now()}-initial`,
+            type: 'initial',
+            amount: debt,
+            note: 'Initial debt',
+            date: new Date().toISOString()
+        }] : [],
+        createdAt: new Date().toISOString()
+    };
+    
+    customers.push(customer);
+    await optimizedSaveData();
+    displayCustomers();
+    updateHome();
+    closeCustomerForm();
+    
+    showSuccessToast(`Customer added: ${name}`);
+}
+
+async function saveDeposit() {
+    const name = document.getElementById('depositName').value.trim();
+    const amount = parseFloat(document.getElementById('depositAmount').value);
+    const description = document.getElementById('depositDescription').value.trim();
+    
+    if (!name) {
+        alert('Please enter customer name');
+        return;
+    }
+    
+    if (isNaN(amount) || amount <= 0) {
+        alert('Please enter a valid deposit amount');
+        return;
+    }
+    
+    const clate = {
+        id: Date.now(),
+        customerName: name,
+        amount,
+        description: description || 'Bottle deposit',
+        date: new Date().toISOString(),
+        returned: false
+    };
+    
+    clates.push(clate);
+    await optimizedSaveData();
+    displayKosiyo();
+    updateHome();
+    closeDepositForm();
+    
+    showSuccessToast(`Deposit recorded: ${name} - RWF ${amount.toLocaleString()}`);
+}
+
+async function confirmDebt() {
+    const amount = parseFloat(document.getElementById('debtAmount').value);
+    
+    if (isNaN(amount) || amount <= 0) {
+        alert('Please enter a valid amount');
+        return;
+    }
+    
+    if (currentCustomerIndex === null || !customers[currentCustomerIndex]) {
+        alert('Customer not found');
+        return;
+    }
+    
+    const customer = customers[currentCustomerIndex];
+    const currentOwing = Number(customer.owing || 0);
+
+    switch(debtAction) {
+        case 'add':
+            customer.owing = currentOwing + amount;
+            appendDebtHistory(customer, 'add', amount, 'Debt added manually');
+            showSuccessToast(`Debt added for ${customer.name}: RWF ${amount.toLocaleString()}`);
+            break;
+        case 'reduce':
+            {
+                const reducedBy = Math.min(amount, currentOwing);
+                customer.owing = Math.max(0, currentOwing - amount);
+                appendDebtHistory(customer, 'reduce', -reducedBy, 'Debt reduced');
+                showSuccessToast(`Debt reduced for ${customer.name}: RWF ${reducedBy.toLocaleString()}`);
+            }
+            break;
+        case 'clear':
+            appendDebtHistory(customer, 'clear', -currentOwing, 'Debt cleared');
+            customer.owing = 0;
+            showSuccessToast(`Debt cleared for ${customer.name}`);
+            break;
+    }
+    
+    await optimizedSaveData();
+    displayCustomers();
+    updateHome();
+    closeDebtForm();
+}
+
+// ================= CUSTOMER FUNCTIONS =================
+function displayCustomers() {
+    const list = document.getElementById('customerList');
+    if (!list) return;
+    
+    clearElement(list);
+    
+    if (customers.length === 0) {
+        list.innerHTML = '<div class="no-data">No customers yet. Add one above!</div>';
+        return;
+    }
+    
+    customers.forEach((customer, index) => {
+        const item = document.createElement('div');
+        item.className = 'customer-item';
+        item.innerHTML = `
+            <div class="customer-info">
+                <strong>${escapeHtml(customer.name)}</strong>
+                <div class="customer-details">
+                    ${customer.phone ? `<div class="customer-detail-item">&#128222; Phone: ${escapeHtml(customer.phone)}</div>` : ''}
+                    ${customer.location ? `<div class="customer-detail-item">&#128205; Location: ${escapeHtml(customer.location)}</div>` : ''}
+                    ${customer.type ? `<div class="customer-detail-item">&#127991; Type: ${escapeHtml(customer.type)}</div>` : ''}
+                    ${customer.notes ? `<div class="customer-detail-item">&#128221; Notes: ${escapeHtml(customer.notes)}</div>` : ''}
+                </div>
+                <div style="color: ${customer.owing > 0 ? '#ff4757' : '#2ed573'}; font-weight: bold; margin-top: 10px;">
+                    ${customer.owing > 0 ? `&#128179; Owes: RWF ${customer.owing.toLocaleString()}` : '&#9989; No debt'}
+                </div>
+            </div>
+            <div class="customer-actions">
+                <button onclick="openAddDebtForm(${index})">&#10133; Add Debt</button>
+                <button onclick="openReduceDebtForm(${index})">&#10134; Reduce Debt</button>
+                <button onclick="openClearDebtForm(${index})">&#10060; Clear Debt</button>
+                <button onclick="exportCustomerDebtPDF(${index})" style="background: #ffa502;">PDF</button>
+                <button onclick="deleteCustomer(${index})" style="background: #ff4757;">Delete</button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+}
+
+async function deleteCustomer(index) {
+    if (!customers[index]) return;
+    
+    if (confirm(`Delete customer "${customers[index].name}"? This cannot be undone.`)) {
+        const removedName = customers[index].name;
+        customers.splice(index, 1);
+        await optimizedSaveData();
+        displayCustomers();
+        updateHome();
+        showSuccessToast(`Customer deleted: ${removedName}`);
+    }
+}
+
+function filterCustomers(type) {
+    const list = document.getElementById('customerList');
+    if (!list) return;
+    
+    clearElement(list);
+    
+    let filtered = [];
+    switch(type) {
+        case 'all':
+            filtered = customers;
+            break;
+        case 'owing':
+            filtered = customers.filter(c => c.owing > 0);
+            break;
+        case 'cleared':
+            filtered = customers.filter(c => c.owing === 0);
+            break;
+    }
+    
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="no-data">No customers found</div>';
+        return;
+    }
+    
+    filtered.forEach((customer) => {
+        const index = customers.findIndex(c => c.id === customer.id);
+        if (index === -1) return;
+        
+        const item = document.createElement('div');
+        item.className = 'customer-item';
+        item.innerHTML = `
+            <div class="customer-info">
+                <strong>${escapeHtml(customer.name)}</strong>
+                <div class="customer-details">
+                    ${customer.phone ? `<div class="customer-detail-item">&#128222; Phone: ${escapeHtml(customer.phone)}</div>` : ''}
+                    ${customer.location ? `<div class="customer-detail-item">&#128205; Location: ${escapeHtml(customer.location)}</div>` : ''}
+                    ${customer.type ? `<div class="customer-detail-item">&#127991; Type: ${escapeHtml(customer.type)}</div>` : ''}
+                    ${customer.notes ? `<div class="customer-detail-item">&#128221; Notes: ${escapeHtml(customer.notes)}</div>` : ''}
+                </div>
+                <div style="color: ${customer.owing > 0 ? '#ff4757' : '#2ed573'}; font-weight: bold; margin-top: 10px;">
+                    ${customer.owing > 0 ? `&#128179; Owes: RWF ${customer.owing.toLocaleString()}` : '&#9989; No debt'}
+                </div>
+            </div>
+            <div class="customer-actions">
+                <button onclick="openAddDebtForm(${index})">&#10133; Add Debt</button>
+                <button onclick="openReduceDebtForm(${index})">&#10134; Reduce Debt</button>
+                <button onclick="openClearDebtForm(${index})">&#10060; Clear Debt</button>
+                <button onclick="exportCustomerDebtPDF(${index})" style="background: #ffa502;">PDF</button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+}
+
+// Debounced version for customer search
+const debouncedFilterCustomers = debounce(function(value) {
+    const list = document.getElementById('customerList');
+    if (!list) return;
+    
+    clearElement(list);
+    
+    const searchTerm = value.toLowerCase();
+    const filtered = customers.filter(customer => 
+        customer.name.toLowerCase().includes(searchTerm) ||
+        (customer.phone && customer.phone.includes(searchTerm)) ||
+        (customer.location && customer.location.toLowerCase().includes(searchTerm)) ||
+        (customer.notes && customer.notes.toLowerCase().includes(searchTerm)) ||
+        (customer.type && customer.type.toLowerCase().includes(searchTerm))
+    );
+    
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="no-data">No customers found</div>';
+        return;
+    }
+    
+    filtered.forEach((customer) => {
+        const index = customers.findIndex(c => c.id === customer.id);
+        if (index === -1) return;
+        
+        const item = document.createElement('div');
+        item.className = 'customer-item';
+        item.innerHTML = `
+            <div class="customer-info">
+                <strong>${escapeHtml(customer.name)}</strong>
+                <div class="customer-details">
+                    ${customer.phone ? `<div class="customer-detail-item">&#128222; Phone: ${escapeHtml(customer.phone)}</div>` : ''}
+                    ${customer.location ? `<div class="customer-detail-item">&#128205; Location: ${escapeHtml(customer.location)}</div>` : ''}
+                    ${customer.type ? `<div class="customer-detail-item">&#127991; Type: ${escapeHtml(customer.type)}</div>` : ''}
+                    ${customer.notes ? `<div class="customer-detail-item">&#128221; Notes: ${escapeHtml(customer.notes)}</div>` : ''}
+                </div>
+                <div style="color: ${customer.owing > 0 ? '#ff4757' : '#2ed573'}; font-weight: bold; margin-top: 10px;">
+                    ${customer.owing > 0 ? `&#128179; Owes: RWF ${customer.owing.toLocaleString()}` : '&#9989; No debt'}
+                </div>
+            </div>
+            <div class="customer-actions">
+                <button onclick="openAddDebtForm(${index})">&#10133; Add Debt</button>
+                <button onclick="openReduceDebtForm(${index})">&#10134; Reduce Debt</button>
+                <button onclick="openClearDebtForm(${index})">&#10060; Clear Debt</button>
+                <button onclick="exportCustomerDebtPDF(${index})" style="background: #ffa502;">PDF</button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+}, 300);
+
+// ================= CLATE/DEPOSIT FUNCTIONS =================
+async function returnKosiyo(id) {
+    const index = clates.findIndex(clate => clate.id === id);
+    if (index === -1) {
+        alert('Deposit not found!');
+        return;
+    }
+
+    const customerName = clates[index].customerName;
+    const amount = Number(clates[index].amount || 0);
+    const shouldMarkReturned = await showUiConfirm({
+        title: 'Mark Deposit Returned',
+        message: `Mark deposit from ${customerName} as returned?\nAmount: RWF ${amount.toLocaleString()}`,
+        confirmText: 'Mark Returned',
+        cancelText: 'Cancel'
+    });
+    if (!shouldMarkReturned) return;
+
+    clates[index].returned = true;
+    clates[index].returnedDate = new Date().toISOString();
+    await optimizedSaveData();
+    displayKosiyo();
+    updateHome();
+    showSuccessToast(`Deposit returned: ${customerName} - RWF ${amount.toLocaleString()}`);
+}
+
+async function deleteKosiyo(id) {
+    const index = clates.findIndex(clate => clate.id === id);
+    if (index === -1) {
+        alert('Deposit not found!');
+        return;
+    }
+    
+    if (confirm(`Delete this deposit record?\n${clates[index].customerName} - RWF ${clates[index].amount}`)) {
+        const customerName = clates[index].customerName;
+        const amount = Number(clates[index].amount || 0);
+        clates.splice(index, 1);
+        await optimizedSaveData();
+        displayKosiyo();
+        updateHome();
+        showSuccessToast(`Deposit deleted: ${customerName} - RWF ${amount.toLocaleString()}`);
+    }
+}
+
+function displayKosiyo() {
+    const list = document.getElementById('kosiyoList');
+    if (!list) return;
+    
+    clearElement(list);
+    
+    if (clates.length === 0) {
+        list.innerHTML = '<div class="no-data">No deposits recorded yet</div>';
+        return;
+    }
+    
+    // Reset filter buttons to "All" when showing all
+    const filterButtons = document.querySelectorAll('.filter-buttons .filter-btn');
+    if (filterButtons && filterButtons.length > 0) {
+        filterButtons.forEach(btn => btn.classList.remove('active'));
+        if (filterButtons[0]) {
+            filterButtons[0].classList.add('active');
+        }
+    }
+    
+    // Clear search input
+    const searchInput = document.getElementById('depositSearch');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    
+    clates.forEach((clate) => {
+        const item = document.createElement('div');
+        item.className = 'deposit-item';
+        item.style.opacity = clate.returned ? '0.6' : '1';
+        item.innerHTML = `
+            <div class="deposit-info">
+                <strong>${escapeHtml(clate.customerName)}</strong>
+                <div>${escapeHtml(clate.description)}</div>
+                <div class="deposit-amount">RWF ${clate.amount.toLocaleString()}</div>
+                <div class="deposit-date">${new Date(clate.date).toLocaleDateString()}</div>
+                ${clate.returned ? 
+                    `<div style="color: #2ed573; font-weight: bold;">Returned on ${clate.returnedDate ? new Date(clate.returnedDate).toLocaleDateString() : 'Date unknown'}</div>` : 
+                    '<div style="color: #ffa502; font-weight: bold;">Pending Return</div>'
+                }
+            </div>
+            <div class="deposit-actions">
+                ${!clate.returned ? `
+                    <button onclick="returnKosiyo(${clate.id})">Mark Returned</button>
+                ` : ''}
+                <button onclick="deleteKosiyo(${clate.id})" style="background: #ff4757;">Delete</button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+}
+
+// ================= DEPOSIT SEARCH FUNCTIONS =================
+const debouncedFilterDeposits = debounce(function(value) {
+    filterDepositsBySearch(value);
+}, 300);
+
+function filterDepositsBySearch(searchTerm) {
+    const list = document.getElementById('kosiyoList');
+    if (!list) return;
+    
+    clearElement(list);
+    
+    const searchLower = searchTerm.toLowerCase();
+    const filtered = clates.filter(deposit => 
+        deposit.customerName.toLowerCase().includes(searchLower) ||
+        (deposit.description && deposit.description.toLowerCase().includes(searchLower)) ||
+        (deposit.returned && searchLower.includes('returned')) ||
+        (!deposit.returned && searchLower.includes('pending')) ||
+        (searchLower.includes('rwf') && deposit.amount.toString().includes(searchTerm.replace(/\D/g, '')))
+    );
+    
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="no-data">No deposits found</div>';
+        return;
+    }
+    
+    filtered.forEach((deposit) => {
+        const item = document.createElement('div');
+        item.className = 'deposit-item';
+        item.style.opacity = deposit.returned ? '0.6' : '1';
+        item.innerHTML = `
+            <div class="deposit-info">
+                <strong>${escapeHtml(deposit.customerName)}</strong>
+                <div>${escapeHtml(deposit.description)}</div>
+                <div class="deposit-amount">RWF ${deposit.amount.toLocaleString()}</div>
+                <div class="deposit-date">${new Date(deposit.date).toLocaleDateString()}</div>
+                ${deposit.returned ? 
+                    `<div style="color: #2ed573; font-weight: bold;">Returned on ${deposit.returnedDate ? new Date(deposit.returnedDate).toLocaleDateString() : 'Date unknown'}</div>` : 
+                    '<div style="color: #ffa502; font-weight: bold;">Pending Return</div>'
+                }
+            </div>
+            <div class="deposit-actions">
+                ${!deposit.returned ? `
+                    <button onclick="returnKosiyo(${deposit.id})">Mark Returned</button>
+                ` : ''}
+                <button onclick="deleteKosiyo(${deposit.id})" style="background: #ff4757;">Delete</button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+}
+
+function filterDeposits(type, event) {
+    const list = document.getElementById('kosiyoList');
+    if (!list) return;
+    
+    // Update active filter button
+    const filterButtons = document.querySelectorAll('.filter-buttons .filter-btn');
+    if (filterButtons) {
+        filterButtons.forEach(btn => {
+            btn.classList.remove('active');
+        });
+        if (event && event.target) {
+            event.target.classList.add('active');
+        }
+    }
+    
+    clearElement(list);
+    
+    let filtered = [];
+    switch(type) {
+        case 'all':
+            filtered = clates;
+            break;
+        case 'pending':
+            filtered = clates.filter(d => !d.returned);
+            break;
+        case 'returned':
+            filtered = clates.filter(d => d.returned);
+            break;
+    }
+    
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="no-data">No deposits found</div>';
+        return;
+    }
+    
+    filtered.forEach((deposit) => {
+        const item = document.createElement('div');
+        item.className = 'deposit-item';
+        item.style.opacity = deposit.returned ? '0.6' : '1';
+        item.innerHTML = `
+            <div class="deposit-info">
+                <strong>${escapeHtml(deposit.customerName)}</strong>
+                <div>${escapeHtml(deposit.description)}</div>
+                <div class="deposit-amount">RWF ${deposit.amount.toLocaleString()}</div>
+                <div class="deposit-date">${new Date(deposit.date).toLocaleDateString()}</div>
+                ${deposit.returned ? 
+                    `<div style="color: #2ed573; font-weight: bold;">Returned on ${deposit.returnedDate ? new Date(deposit.returnedDate).toLocaleDateString() : 'Date unknown'}</div>` : 
+                    '<div style="color: #ffa502; font-weight: bold;">Pending Return</div>'
+                }
+            </div>
+            <div class="deposit-actions">
+                ${!deposit.returned ? `
+                    <button onclick="returnKosiyo(${deposit.id})">Mark Returned</button>
+                ` : ''}
+                <button onclick="deleteKosiyo(${deposit.id})" style="background: #ff4757;">Delete</button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+}
+
+// ================= DASHBOARD FUNCTIONS =================
+function updateHome() {
+    // Today's sales
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todaySales = sales.filter(sale => {
+        const saleDate = new Date(sale.date);
+        return saleDate >= today;
+    });
+    
+    const todayTotal = todaySales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+    const todaySalesElement = document.getElementById('todaySales');
+    if (todaySalesElement) {
+        todaySalesElement.textContent = `RWF ${todayTotal.toLocaleString()}`;
+    }
+    
+    const todayProfit = calculateProfitFromSales(todaySales);
+    const todayProfitElement = document.getElementById('todayProfit');
+    if (todayProfitElement) {
+        todayProfitElement.textContent = `RWF ${todayProfit.toLocaleString()}`;
+    }
+    
+    // Total customer debt
+    const totalDebt = customers.reduce((sum, customer) => sum + (customer.owing || 0), 0);
+    const customersOwingElement = document.getElementById('customersOwing');
+    if (customersOwingElement) {
+        customersOwingElement.textContent = `RWF ${totalDebt.toLocaleString()}`;
+    }
+    
+    // Pending deposits
+    const pendingDeposits = clates
+        .filter(clate => !clate.returned)
+        .reduce((sum, clate) => sum + (clate.amount || 0), 0);
+    
+    const clatesPendingElement = document.getElementById('clatesPending');
+    if (clatesPendingElement) {
+        clatesPendingElement.textContent = `RWF ${pendingDeposits.toLocaleString()}`;
+    }
+}
+
+function getProfitConfig() {
+    const mode = settings.profitMode === 'perCase' ? 'perCase' : 'percentage';
+    const percentage = Number.isFinite(Number(settings.profitPercentage)) ? Number(settings.profitPercentage) : 30;
+    return {
+        mode,
+        percentage: Math.max(0, percentage)
+    };
+}
+
+function getSaleProfitPerCase(sale) {
+    const fromSale = Number(sale && sale.profitPerCase);
+    if (Number.isFinite(fromSale) && fromSale >= 0) return fromSale;
+    const fromDrink = getDrinkProfitPerCaseByName(sale && sale.drinkName);
+    if (Number.isFinite(fromDrink) && fromDrink >= 0) return fromDrink;
+    return getDefaultDrinkProfitPerCase();
+}
+
+function calculateProfitFromSales(salesList) {
+    const list = Array.isArray(salesList) ? salesList : [];
+    const cfg = getProfitConfig();
+    if (cfg.mode === 'perCase') {
+        const totalPerDrinkProfit = list.reduce((sum, sale) => {
+            const qty = Number(sale.quantity) || 0;
+            return sum + (qty * getSaleProfitPerCase(sale));
+        }, 0);
+        return Math.round(totalPerDrinkProfit);
+    }
+    const totalAmount = list.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    return Math.round(totalAmount * (cfg.percentage / 100));
+}
+
+function getProfitDescriptor() {
+    const cfg = getProfitConfig();
+    return cfg.mode === 'perCase'
+        ? t('profitLabelPerDrinkCase')
+        : t('profitLabelPercentage').replace('{value}', cfg.percentage);
+}
+
+// ================= REPORT FUNCTIONS =================
+function showDailyReport(dateValue = null) {
+    const dateInput = document.getElementById('dailyReportDate');
+    const selectedDate = dateValue || (dateInput && dateInput.value) || getTodayISODate();
+    if (dateInput) dateInput.value = selectedDate;
+
+    const { dayStart, dayEnd } = getDayRange(selectedDate);
+    const dailySales = sales.filter((sale) => {
+        const saleDate = new Date(sale.date);
+        return saleDate >= dayStart && saleDate < dayEnd;
+    });
+
+    const total = dailySales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+    const cashSales = dailySales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
+    const creditSales = dailySales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
+    const profit = calculateProfitFromSales(dailySales);
+    const profitLabel = getProfitDescriptor();
+
+    const drinksSold = {};
+    dailySales.forEach(sale => {
+        drinksSold[sale.drinkName] = (drinksSold[sale.drinkName] || 0) + (sale.quantity || 0);
+    });
+
+    const drinksTable = Object.entries(drinksSold)
+        .map(([name, qty]) => `<tr><td>${escapeHtml(name)}</td><td>${qty}</td></tr>`)
+        .join('');
+
+    const customersInDebt = customers.filter(c => c.owing > 0);
+    const debtTable = customersInDebt
+        .map(c => `<tr><td>${escapeHtml(c.name)}</td><td>RWF ${c.owing.toLocaleString()}</td></tr>`)
+        .join('');
+    const totalDebt = customersInDebt.reduce((sum, c) => sum + (c.owing || 0), 0);
+
+    const reportOutput = document.getElementById('reportOutput');
+    if (reportOutput) {
+        reportOutput.innerHTML = `
+            <h3>Daily Report - ${dayStart.toLocaleDateString()}</h3>
+            
+            <h4>Sales Summary</h4>
+            <table>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Total Sales</td>
+                    <td>RWF ${total.toLocaleString()}</td>
+                </tr>
+                <tr>
+                    <td>Cash Sales</td>
+                    <td>RWF ${cashSales.toLocaleString()}</td>
+                </tr>
+                <tr>
+                    <td>Credit Sales</td>
+                    <td>RWF ${creditSales.toLocaleString()}</td>
+                </tr>
+                <tr>
+                    <td>Number of Transactions</td>
+                    <td>${dailySales.length}</td>
+                </tr>
+                <tr style="background-color: #e8f4f8;">
+                    <td><strong>${profitLabel}</strong></td>
+                    <td><strong>RWF ${profit.toLocaleString()}</strong></td>
+                </tr>
+            </table>
+            
+            ${drinksTable ? `
+            <h4 style="margin-top: 25px;">Drinks Sold</h4>
+            <table>
+                <tr>
+                    <th>Drink Name</th>
+                    <th>Quantity</th>
+                </tr>
+                ${drinksTable}
+            </table>
+            ` : ''}
+            
+            ${debtTable ? `
+            <h4 style="margin-top: 25px;">Customers in Debt</h4>
+            <table>
+                <tr>
+                    <th>Customer Name</th>
+                    <th>Amount Owed</th>
+                </tr>
+                ${debtTable}
+                <tr style="background-color: #fff3cd;">
+                    <td><strong>Total Debt</strong></td>
+                    <td><strong>RWF ${totalDebt.toLocaleString()}</strong></td>
+                </tr>
+            </table>
+            ` : '<p style="color: #666;">No customers in debt</p>'}
+            
+            <div style="margin-top: 30px; color: #666; font-size: 12px;">
+                Report generated on ${new Date().toLocaleString()}
+            </div>
+        `;
+    }
+}
+
+function setDailyReportToday() {
+    const todayIso = getTodayISODate();
+    const dateInput = document.getElementById('dailyReportDate');
+    if (dateInput) dateInput.value = todayIso;
+    showDailyReport(todayIso);
+}
+
+function printCurrentReport() {
+    const reportOutput = document.getElementById('reportOutput');
+    if (!reportOutput || !reportOutput.innerHTML.trim()) {
+        alert('No report available to print.');
+        return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) {
+        alert('Could not open print window.');
+        return;
+    }
+
+    printWindow.document.write(`
+        <html>
+        <head>
+            <title>Report Print</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 16px; }
+                table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background: #f2f5fb; }
+            </style>
+        </head>
+        <body>${reportOutput.innerHTML}</body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
+}
+
+function setRangeDateInputs(startDate, endDate) {
+    const startInput = document.getElementById('rangeStartDate');
+    const endInput = document.getElementById('rangeEndDate');
+    if (startInput) startInput.value = startDate.toISOString().split('T')[0];
+    if (endInput) endInput.value = endDate.toISOString().split('T')[0];
+}
+
+function setRangeToThisMonth() {
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    setRangeDateInputs(monthStart, today);
+
+    const monthInput = document.getElementById('rangeMonth');
+    if (monthInput) monthInput.value = today.toISOString().slice(0, 7);
+}
+
+function setRangeToSelectedMonth() {
+    const monthInput = document.getElementById('rangeMonth');
+    if (!monthInput || !monthInput.value) {
+        setRangeToThisMonth();
+        return;
+    }
+
+    const [yearStr, monthStr] = monthInput.value.split('-');
+    const year = Number(yearStr);
+    const monthIndex = Number(monthStr) - 1;
+    if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+        alert(t('rangeValidation'));
+        return;
+    }
+
+    const startDate = new Date(year, monthIndex, 1);
+    const endDate = new Date(year, monthIndex + 1, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (endDate > today) endDate.setTime(today.getTime());
+    setRangeDateInputs(startDate, endDate);
+}
+
+function getValidatedRangeSelection(showErrors = true) {
+    const startInput = document.getElementById('rangeStartDate');
+    const endInput = document.getElementById('rangeEndDate');
+    if (!startInput || !endInput || !startInput.value || !endInput.value) {
+        if (showErrors) alert(t('rangeValidation'));
+        return null;
+    }
+
+    const startDate = new Date(startInput.value);
+    const endDate = new Date(endInput.value);
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(0, 0, 0, 0);
+
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+        if (showErrors) alert(t('rangeValidation'));
+        return null;
+    }
+    if (endDate < startDate) {
+        if (showErrors) alert(t('rangeEndBeforeStart'));
+        return null;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (startDate > today || endDate > today) {
+        if (showErrors) alert(t('rangeFutureNotAllowed'));
+        return null;
+    }
+
+    return {
+        startDate,
+        endDate,
+        startIso: startInput.value,
+        endIso: endInput.value
+    };
+}
+
+function getSalesForRange(startDate, endDate) {
+    const endExclusive = new Date(endDate);
+    endExclusive.setDate(endExclusive.getDate() + 1);
+    return sales.filter((sale) => {
+        const saleDate = new Date(sale.date);
+        return saleDate >= startDate && saleDate < endExclusive;
+    });
+}
+
+function showCustomRangeReport() {
+    const selection = getValidatedRangeSelection(true);
+    if (!selection) return;
+
+    const rangeSales = getSalesForRange(selection.startDate, selection.endDate);
+    const total = rangeSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+    const cashSales = rangeSales.filter((s) => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
+    const creditSales = rangeSales.filter((s) => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
+    const profit = calculateProfitFromSales(rangeSales);
+    const profitLabel = getProfitDescriptor();
+
+    const drinksSold = {};
+    const salesByDay = {};
+    rangeSales.forEach((sale) => {
+        drinksSold[sale.drinkName] = (drinksSold[sale.drinkName] || 0) + (sale.quantity || 0);
+        const dayKey = new Date(sale.date).toISOString().split('T')[0];
+        salesByDay[dayKey] = (salesByDay[dayKey] || 0) + (sale.total || 0);
+    });
+
+    const topDrinksRows = Object.entries(drinksSold)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([name, qty]) => `<tr><td>${escapeHtml(name)}</td><td>${qty}</td></tr>`)
+        .join('');
+
+    const salesByDayRows = Object.entries(salesByDay)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([dayIso, dayTotal]) => `<tr><td>${new Date(dayIso).toLocaleDateString()}</td><td>RWF ${dayTotal.toLocaleString()}</td></tr>`)
+        .join('');
+
+    const reportOutput = document.getElementById('reportOutput');
+    if (!reportOutput) return;
+
+    if (rangeSales.length === 0) {
+        reportOutput.innerHTML = `
+            <h3>${t('rangeReportTitle')}</h3>
+            <p style="margin-top: 12px; color: #666;">${t('rangeNoSales')}</p>
+            <p style="margin-top: 8px; color: #666;">
+                ${selection.startDate.toLocaleDateString()} - ${selection.endDate.toLocaleDateString()}
+            </p>
+        `;
+        return;
+    }
+
+    reportOutput.innerHTML = `
+        <h3>${t('rangeReportTitle')} - ${selection.startDate.toLocaleDateString()} to ${selection.endDate.toLocaleDateString()}</h3>
+        <h4>${t('rangeSummary')}</h4>
+        <table>
+            <tr><th>Metric</th><th>Value</th></tr>
+            <tr><td>Total Sales</td><td>RWF ${total.toLocaleString()}</td></tr>
+            <tr><td>Cash Sales</td><td>RWF ${cashSales.toLocaleString()}</td></tr>
+            <tr><td>Credit Sales</td><td>RWF ${creditSales.toLocaleString()}</td></tr>
+            <tr><td>Number of Transactions</td><td>${rangeSales.length}</td></tr>
+            <tr style="background-color: #e8f4f8;">
+                <td><strong>${profitLabel}</strong></td>
+                <td><strong>RWF ${profit.toLocaleString()}</strong></td>
+            </tr>
+        </table>
+        ${salesByDayRows ? `
+        <h4 style="margin-top: 24px;">Sales by Day</h4>
+        <table>
+            <tr><th>Date</th><th>Total</th></tr>
+            ${salesByDayRows}
+        </table>
+        ` : ''}
+        ${topDrinksRows ? `
+        <h4 style="margin-top: 24px;">Top Drinks in Range</h4>
+        <table>
+            <tr><th>Drink Name</th><th>Quantity Sold</th></tr>
+            ${topDrinksRows}
+        </table>
+        ` : ''}
+        <div style="margin-top: 20px; color: #666; font-size: 12px;">
+            Report generated on ${new Date().toLocaleString()}
+        </div>
+    `;
+}
+
+function exportCustomRangePDF() {
+    const selection = getValidatedRangeSelection(true);
+    if (!selection) return;
+
+    const rangeSales = getSalesForRange(selection.startDate, selection.endDate);
+    if (rangeSales.length === 0) {
+        alert(t('rangeNoSales'));
+        return;
+    }
+
+    try {
+        const doc = createPDFDocument();
+        const reportTitle = 'Date Range Report';
+        const margin = 15;
+        const startY = applyPdfBrandHeader(doc, reportTitle);
+        const pageWidth = doc.internal.pageSize.width;
+        const tableWidth = pageWidth - margin * 2;
+        const pageHeight = doc.internal.pageSize.height;
+        let y = startY;
+
+        const total = rangeSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+        const cashSales = rangeSales.filter((s) => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
+        const creditSales = rangeSales.filter((s) => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
+        const profit = calculateProfitFromSales(rangeSales);
+
+        const drinksSold = {};
+        rangeSales.forEach((sale) => {
+            drinksSold[sale.drinkName] = (drinksSold[sale.drinkName] || 0) + (sale.quantity || 0);
+        });
+        const topDrinks = Object.entries(drinksSold).sort((a, b) => b[1] - a[1]).slice(0, 12);
+
+        const salesByDay = {};
+        rangeSales.forEach((sale) => {
+            const key = toPdfDateKey(sale.date);
+            salesByDay[key] = (salesByDay[key] || 0) + (sale.total || 0);
+        });
+        const dayRows = Object.entries(salesByDay).sort((a, b) => a[0].localeCompare(b[0]));
+
+        y = drawPdfTitleBlock(doc, y, margin, 'Date Range Report', [
+            `Period: ${formatPdfDate(selection.startDate)} to ${formatPdfDate(selection.endDate)}`,
+            `Generated: ${new Date().toLocaleString()}`
+        ]);
+
+        doc.setFillColor(240, 240, 240);
+        doc.rect(margin, y - 3, tableWidth, 24, 'F');
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text(`Total Sales: RWF ${total.toLocaleString()}`, margin + 4, y + 3);
+        doc.text(`Cash: RWF ${cashSales.toLocaleString()}`, margin + 4, y + 10);
+        doc.text(`Credit: RWF ${creditSales.toLocaleString()}`, margin + 4, y + 17);
+        doc.text(`Transactions: ${rangeSales.length}`, margin + 95, y + 3);
+        doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 95, y + 10);
+        y += 30;
+
+        const drawTopDrinksHeader = () => {
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(25, 86, 170);
+            doc.text('Top Drinks', margin, y);
+            y += 7;
+            doc.setFontSize(10);
+            doc.setFillColor(37, 117, 252);
+            doc.setTextColor(255, 255, 255);
+            doc.rect(margin, y - 5, tableWidth, 7, 'F');
+            doc.text('Drink Name', margin + 3, y);
+            doc.text('Qty', margin + 120, y);
+            y += 8;
+            doc.setTextColor(0);
+            doc.setFont(undefined, 'normal');
+        };
+
+        drawTopDrinksHeader();
+        topDrinks.forEach(([drink, qty], idx) => {
+            if (y > pageHeight - 16) {
+                doc.addPage();
+                y = startY;
+                drawTopDrinksHeader();
+            }
+            if (idx % 2 === 0) {
+                doc.setFillColor(250, 250, 250);
+                doc.rect(margin, y - 5, tableWidth, 6, 'F');
+            }
+            doc.text(String(drink).slice(0, 45), margin + 3, y);
+            doc.text(String(qty), margin + 120, y);
+            y += 6;
+        });
+        y += 8;
+
+        if (y > pageHeight - 40) {
+            doc.addPage();
+            y = 20;
+        }
+
+        const drawDailyBreakdownHeader = () => {
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(12);
+            doc.setTextColor(25, 86, 170);
+            doc.text('Daily Breakdown', margin, y);
+            y += 7;
+            doc.setFontSize(10);
+            doc.setFillColor(37, 117, 252);
+            doc.setTextColor(255, 255, 255);
+            doc.rect(margin, y - 5, tableWidth, 7, 'F');
+            doc.text('Date', margin + 3, y);
+            doc.text('Total (RWF)', margin + 120, y);
+            y += 8;
+            doc.setTextColor(0);
+            doc.setFont(undefined, 'normal');
+        };
+
+        drawDailyBreakdownHeader();
+        dayRows.forEach(([dayIso, dayTotal], idx) => {
+            if (y > pageHeight - 16) {
+                doc.addPage();
+                y = startY;
+                drawDailyBreakdownHeader();
+            }
+            if (idx % 2 === 0) {
+                doc.setFillColor(250, 250, 250);
+                doc.rect(margin, y - 5, tableWidth, 6, 'F');
+            }
+            doc.text(formatPdfDate(dayIso), margin + 3, y);
+            doc.text(Number(dayTotal || 0).toLocaleString(), margin + 120, y);
+            y += 6;
+        });
+
+        applyPdfBrandFooter(doc, reportTitle);
+        doc.save(`report-range-${selection.startIso}-to-${selection.endIso}.pdf`);
+        showSuccessToast('Range PDF exported successfully.');
+    } catch (error) {
+        console.error('Range PDF export error:', error);
+        alert('Error exporting range PDF: ' + error.message);
+    }
+}
+
+function showWeeklyReport() {
+    const today = new Date();
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    
+    const weeklySales = sales.filter(sale => {
+        const saleDate = new Date(sale.date);
+        return saleDate >= weekAgo;
+    });
+    
+    const total = weeklySales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+    const profit = calculateProfitFromSales(weeklySales);
+    const dailyAverage = Math.round(total / 7);
+    
+    // Sales by day
+    const salesByDay = {};
+    weeklySales.forEach(sale => {
+        const date = new Date(sale.date).toLocaleDateString();
+        salesByDay[date] = (salesByDay[date] || 0) + (sale.total || 0);
+    });
+    
+    const dayTable = Object.entries(salesByDay)
+        .map(([date, total]) => `<tr><td>${date}</td><td>RWF ${total.toLocaleString()}</td></tr>`)
+        .join('');
+    
+    // Top drinks this week
+    const drinksSold = {};
+    weeklySales.forEach(sale => {
+        drinksSold[sale.drinkName] = (drinksSold[sale.drinkName] || 0) + (sale.quantity || 0);
+    });
+    
+    const topDrinks = Object.entries(drinksSold)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, qty]) => `<tr><td>${escapeHtml(name)}</td><td>${qty}</td></tr>`)
+        .join('');
+    
+    const reportOutput = document.getElementById('reportOutput');
+    if (reportOutput) {
+        reportOutput.innerHTML = `
+            <h3>Weekly Report (Last 7 Days)</h3>
+            
+            <h4>Weekly Summary</h4>
+            <table>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Total Sales</td>
+                    <td>RWF ${total.toLocaleString()}</td>
+                </tr>
+                <tr>
+                    <td>Number of Transactions</td>
+                    <td>${weeklySales.length}</td>
+                </tr>
+                <tr>
+                    <td>Daily Average</td>
+                    <td>RWF ${dailyAverage.toLocaleString()}</td>
+                </tr>
+                <tr style="background-color: #e8f4f8;">
+                    <td><strong>Weekly Profit</strong></td>
+                    <td><strong>RWF ${profit.toLocaleString()}</strong></td>
+                </tr>
+            </table>
+            
+            ${dayTable ? `
+            <h4 style="margin-top: 25px;">Sales by Day</h4>
+            <table>
+                <tr>
+                    <th>Date</th>
+                    <th>Daily Total</th>
+                </tr>
+                ${dayTable}
+            </table>
+            ` : ''}
+            
+            ${topDrinks ? `
+            <h4 style="margin-top: 25px;">Top 5 Drinks This Week</h4>
+            <table>
+                <tr>
+                    <th>Drink Name</th>
+                    <th>Quantity Sold</th>
+                </tr>
+                ${topDrinks}
+            </table>
+            ` : ''}
+            
+            <div style="margin-top: 30px; color: #666; font-size: 12px;">
+                Report generated on ${new Date().toLocaleString()}
+            </div>
+        `;
+    }
+}
+
+function showMonthlyReport() {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    const monthlySales = sales.filter(sale => {
+        const saleDate = new Date(sale.date);
+        return saleDate >= firstDay;
+    });
+    
+    const total = monthlySales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+    const profit = calculateProfitFromSales(monthlySales);
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const dailyAverage = Math.round(total / daysInMonth);
+    
+    // Sales by day
+    const salesByDay = {};
+    monthlySales.forEach(sale => {
+        const date = new Date(sale.date).toLocaleDateString();
+        salesByDay[date] = (salesByDay[date] || 0) + (sale.total || 0);
+    });
+    
+    const dayTable = Object.entries(salesByDay)
+        .map(([date, total]) => `<tr><td>${date}</td><td>RWF ${total.toLocaleString()}</td></tr>`)
+        .join('');
+    
+    // Top drinks this month
+    const drinksSold = {};
+    monthlySales.forEach(sale => {
+        drinksSold[sale.drinkName] = (drinksSold[sale.drinkName] || 0) + (sale.quantity || 0);
+    });
+    
+    const topDrinks = Object.entries(drinksSold)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, qty]) => `<tr><td>${escapeHtml(name)}</td><td>${qty}</td></tr>`)
+        .join('');
+    
+    const reportOutput = document.getElementById('reportOutput');
+    if (reportOutput) {
+        reportOutput.innerHTML = `
+            <h3>Monthly Report - ${today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
+            
+            <h4>Monthly Summary</h4>
+            <table>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Total Sales</td>
+                    <td>RWF ${total.toLocaleString()}</td>
+                </tr>
+                <tr>
+                    <td>Number of Transactions</td>
+                    <td>${monthlySales.length}</td>
+                </tr>
+                <tr>
+                    <td>Daily Average</td>
+                    <td>RWF ${dailyAverage.toLocaleString()}</td>
+                </tr>
+                <tr style="background-color: #e8f4f8;">
+                    <td><strong>Monthly Profit</strong></td>
+                    <td><strong>RWF ${profit.toLocaleString()}</strong></td>
+                </tr>
+            </table>
+            
+            ${dayTable ? `
+            <h4 style="margin-top: 25px;">Sales by Day</h4>
+            <table>
+                <tr>
+                    <th>Date</th>
+                    <th>Daily Total</th>
+                </tr>
+                ${dayTable}
+            </table>
+            ` : ''}
+            
+            ${topDrinks ? `
+            <h4 style="margin-top: 25px;">Top 5 Drinks This Month</h4>
+            <table>
+                <tr>
+                    <th>Drink Name</th>
+                    <th>Quantity Sold</th>
+                </tr>
+                ${topDrinks}
+            </table>
+            ` : ''}
+            
+            <div style="margin-top: 30px; color: #666; font-size: 12px;">
+                Report generated on ${new Date().toLocaleString()}
+            </div>
+        `;
+    }
+}
+
+function showAnnualReport() {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), 0, 1);
+    
+    const annualSales = sales.filter(sale => {
+        const saleDate = new Date(sale.date);
+        return saleDate >= firstDay;
+    });
+    
+    const total = annualSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+    const profit = calculateProfitFromSales(annualSales);
+    const daysInYear = (today.getFullYear() % 4 === 0) ? 366 : 365;
+    const dailyAverage = Math.round(total / daysInYear);
+    
+    // Sales by month
+    const salesByMonth = {};
+    annualSales.forEach(sale => {
+        const month = new Date(sale.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        salesByMonth[month] = (salesByMonth[month] || 0) + (sale.total || 0);
+    });
+    
+    const monthTable = Object.entries(salesByMonth)
+        .map(([month, total]) => `<tr><td>${month}</td><td>RWF ${total.toLocaleString()}</td></tr>`)
+        .join('');
+    
+    // Top drinks this year
+    const drinksSold = {};
+    annualSales.forEach(sale => {
+        drinksSold[sale.drinkName] = (drinksSold[sale.drinkName] || 0) + (sale.quantity || 0);
+    });
+    
+    const topDrinks = Object.entries(drinksSold)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, qty]) => `<tr><td>${escapeHtml(name)}</td><td>${qty}</td></tr>`)
+        .join('');
+    
+    const reportOutput = document.getElementById('reportOutput');
+    if (reportOutput) {
+        reportOutput.innerHTML = `
+            <h3>Annual Report - ${today.getFullYear()}</h3>
+            
+            <h4>Annual Summary</h4>
+            <table>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Total Sales</td>
+                    <td>RWF ${total.toLocaleString()}</td>
+                </tr>
+                <tr>
+                    <td>Number of Transactions</td>
+                    <td>${annualSales.length}</td>
+                </tr>
+                <tr>
+                    <td>Daily Average</td>
+                    <td>RWF ${dailyAverage.toLocaleString()}</td>
+                </tr>
+                <tr style="background-color: #e8f4f8;">
+                    <td><strong>Annual Profit</strong></td>
+                    <td><strong>RWF ${profit.toLocaleString()}</strong></td>
+                </tr>
+            </table>
+            
+            ${monthTable ? `
+            <h4 style="margin-top: 25px;">Sales by Month</h4>
+            <table>
+                <tr>
+                    <th>Month</th>
+                    <th>Monthly Total</th>
+                </tr>
+                ${monthTable}
+            </table>
+            ` : ''}
+            
+            ${topDrinks ? `
+            <h4 style="margin-top: 25px;">Top 5 Drinks This Year</h4>
+            <table>
+                <tr>
+                    <th>Drink Name</th>
+                    <th>Quantity Sold</th>
+                </tr>
+                ${topDrinks}
+            </table>
+            ` : ''}
+            
+            <div style="margin-top: 30px; color: #666; font-size: 12px;">
+                Report generated on ${new Date().toLocaleString()}
+            </div>
+        `;
+    }
+}
+
+function showFullReport() {
+    const totalSales = sales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+    const totalProfit = calculateProfitFromSales(sales);
+    const totalCustomers = customers.length;
+    const totalDebt = customers.reduce((sum, customer) => sum + (customer.owing || 0), 0);
+    const totalDeposits = clates.filter(c => !c.returned).reduce((sum, c) => sum + (c.amount || 0), 0);
+    
+    // Top drinks
+    const drinkSales = {};
+    sales.forEach(sale => {
+        drinkSales[sale.drinkName] = (drinkSales[sale.drinkName] || 0) + (sale.quantity || 0);
+    });
+    
+    const topDrinks = Object.entries(drinkSales)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, quantity]) => `<tr><td>${escapeHtml(name)}</td><td>${quantity}</td></tr>`)
+        .join('');
+    
+    const reportOutput = document.getElementById('reportOutput');
+    if (reportOutput) {
+        reportOutput.innerHTML = `
+            <h3>Full Business Report</h3>
+            
+            <h4>Overall Summary</h4>
+            <table>
+                <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Total Sales (All Time)</td>
+                    <td>RWF ${totalSales.toLocaleString()}</td>
+                </tr>
+                <tr>
+                    <td>Estimated Total Profit</td>
+                    <td>RWF ${totalProfit.toLocaleString()}</td>
+                </tr>
+                <tr>
+                    <td>Total Customers</td>
+                    <td>${totalCustomers}</td>
+                </tr>
+                <tr>
+                    <td>Total Amount Owed</td>
+                    <td>RWF ${totalDebt.toLocaleString()}</td>
+                </tr>
+                <tr>
+                    <td>Pending Deposits</td>
+                    <td>RWF ${totalDeposits.toLocaleString()}</td>
+                </tr>
+            </table>
+            
+            ${topDrinks ? `
+            <h4 style="margin-top: 30px;">Top 5 Selling Drinks</h4>
+            <table>
+                <tr>
+                    <th>Drink Name</th>
+                    <th>Quantity Sold</th>
+                </tr>
+                ${topDrinks}
+            </table>
+            ` : ''}
+            
+            <div style="margin-top: 30px; color: #666; font-size: 12px;">
+                Report generated on ${new Date().toLocaleString()}
+            </div>
+        `;
+    }
+}
+
+// ================= PDF EXPORT FUNCTIONS =================
+function exportReportToPDF(reportType = 'full') {
+    try {
+        const doc = createPDFDocument();
+        const reportTitleMap = {
+            daily: 'Daily Report',
+            weekly: 'Weekly Report',
+            monthly: 'Monthly Report',
+            annual: 'Annual Report',
+            full: 'Full Business Report'
+        };
+        const reportTitle = reportTitleMap[reportType] || reportTitleMap.full;
+        const margin = 15;
+        const yPos = applyPdfBrandHeader(doc, reportTitle);
+        
+        if (reportType === 'daily') {
+            exportDailyPDF(doc, yPos, margin);
+        } else if (reportType === 'weekly') {
+            exportWeeklyPDF(doc, yPos, margin);
+        } else if (reportType === 'monthly') {
+            exportMonthlyPDF(doc, yPos, margin);
+        } else if (reportType === 'annual') {
+            exportAnnualPDF(doc, yPos, margin);
+        } else {
+            exportFullPDF(doc, yPos, margin);
+        }
+        
+        applyPdfBrandFooter(doc, reportTitle);
+        doc.save(`report-${reportType}-${new Date().toISOString().split('T')[0]}.pdf`);
+        showSuccessToast('PDF exported successfully.');
+        console.log('PDF exported successfully');
+    } catch (error) {
+        console.error('PDF export error:', error);
+        alert('Error exporting PDF: ' + error.message);
+    }
+}
+
+// ================= DEBT SUMMARY PDF EXPORT =================
+function exportDebtSummaryPDF() {
+    try {
+        // Filter customers with debt
+        const customersWithDebt = customers.filter(c => c.owing > 0);
+        
+        if (customersWithDebt.length === 0) {
+            alert('No customers with outstanding debt.');
+            return;
+        }
+        
+        const doc = createPDFDocument();
+        const reportTitle = 'Debt Summary Report';
+        const margin = 15;
+        const startY = applyPdfBrandHeader(doc, reportTitle);
+        const pageWidth = doc.internal.pageSize.width;
+        let yPos = startY;
+
+        yPos = drawPdfTitleBlock(doc, yPos, margin, 'Debt Summary Report', [
+            `Generated: ${new Date().toLocaleString()}`,
+            `Customers with outstanding balances: ${customersWithDebt.length}`
+        ]);
+        
+        // Total debt
+        const totalDebt = customersWithDebt.reduce((sum, c) => sum + c.owing, 0);
+        doc.setFontSize(12);
+        doc.setTextColor(37, 117, 252);
+        doc.text(`Total Outstanding Debt: ${formatPdfCurrency(totalDebt)}`, margin, yPos);
+        doc.setTextColor(0, 0, 0);
+        yPos += 12;
+        
+        // Table headers
+        const headers = ['Customer', 'Phone', 'Location', 'Owing (RWF)'];
+        const colWidth = (pageWidth - 2 * margin) / 4;
+
+        const drawDebtTableHeader = () => {
+            doc.setFillColor(37, 117, 252);
+            doc.setTextColor(255, 255, 255);
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(10);
+
+            headers.forEach((header, i) => {
+                doc.rect(margin + i * colWidth, yPos, colWidth, 8, 'F');
+                doc.text(header, margin + i * colWidth + 2, yPos + 6);
+            });
+
+            yPos += 8;
+            doc.setTextColor(0, 0, 0);
+            doc.setFont(undefined, 'normal');
+            doc.setFontSize(9);
+        };
+
+        drawDebtTableHeader();
+        
+        // Draw table rows
+        customersWithDebt.forEach((customer, idx) => {
+            if (yPos > doc.internal.pageSize.height - 20) {
+                doc.addPage();
+                yPos = startY;
+                drawDebtTableHeader();
+            }
+            
+            const rowData = [
+                customer.name || 'N/A',
+                customer.phone || 'N/A',
+                customer.location || 'N/A',
+                formatPdfCurrency(customer.owing)
+            ];
+            
+            // Alternate row background
+            if (idx % 2 === 1) {
+                doc.setFillColor(245, 248, 250);
+                doc.rect(margin, yPos, pageWidth - 2 * margin, 7, 'F');
+            }
+            
+            rowData.forEach((text, i) => {
+                doc.text(text, margin + i * colWidth + 2, yPos + 5);
+            });
+            
+            yPos += 7;
+        });
+        
+        // Save PDF
+        applyPdfBrandFooter(doc, reportTitle);
+        doc.save(`debt-summary-${new Date().toISOString().split('T')[0]}.pdf`);
+        showSuccessToast('Debt summary PDF exported successfully.');
+    } catch (error) {
+        console.error('Debt PDF export error:', error);
+        alert('Error exporting PDF: ' + error.message);
+    }
+}
+
+// Export detailed debt history for a single customer
+function exportCustomerDebtPDF(index) {
+    try {
+        if (!customers[index]) {
+            alert('Customer not found');
+            return;
+        }
+
+        const customer = customers[index];
+
+        // Gather credit sales tied to this customer
+        const salesRecords = sales.filter(s => s.type === 'credit' && (s.customerId === index || s.customerId === customer.id));
+
+        // Also include legacy "debts" entries
+        const manualDebtEntries = (typeof debts !== 'undefined' ? debts.filter(d => d.customer && d.customer.toLowerCase() === customer.name.toLowerCase()) : []);
+        const debtAdjustments = Array.isArray(customer.debtHistory) ? customer.debtHistory : [];
+
+        const events = [];
+
+        salesRecords.forEach(s => {
+            events.push({
+                date: s.date || '',
+                source: 'Credit Sale',
+                description: s.drinkName || (s.items || ''),
+                qty: s.quantity || s.qty || '',
+                amount: s.total || s.amount || 0
+            });
+        });
+
+        manualDebtEntries.forEach(d => {
+            events.push({
+                date: d.date || '',
+                source: 'Manual Debt Entry',
+                description: d.item || '',
+                qty: d.qty || '',
+                amount: d.amount || ''
+            });
+        });
+
+        debtAdjustments.forEach((entry) => {
+            const type = String(entry.type || '').toLowerCase();
+            let source = 'Debt Adjustment';
+            if (type === 'reduce') source = 'Debt Reduction';
+            if (type === 'clear') source = 'Debt Cleared';
+            if (type === 'add') source = 'Manual Debt Added';
+            if (type === 'initial') source = 'Initial Debt';
+            events.push({
+                date: entry.date || '',
+                source,
+                description: entry.note || '',
+                qty: '',
+                amount: Number(entry.amount || 0)
+            });
+        });
+
+        if (events.length === 0) {
+            alert('No debt history records found for ' + customer.name);
+            return;
+        }
+
+        // Sort by date when available
+        events.sort((a, b) => {
+            if (!a.date && !b.date) return 0;
+            if (!a.date) return 1;
+            if (!b.date) return -1;
+            return new Date(a.date) - new Date(b.date);
+        });
+
+        const doc = createPDFDocument({ orientation: "portrait", unit: "mm", format: "a4" });
+        const reportTitle = 'Customer Debt Report';
+        
+        const margin = 15;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const contentWidth = pageWidth - (margin * 2);
+        let y = applyPdfBrandHeader(doc, reportTitle);
+
+        y = drawPdfTitleBlock(doc, y, margin, 'Customer Debt Report', [
+            `Customer: ${customer.name || 'N/A'}`,
+            `Generated: ${new Date().toLocaleString()}`
+        ]);
+
+        function safe(value, max = 30) {
+            if (!value) return "";
+            return String(value).substring(0, max);
+        }
+
+        // ================= CUSTOMER INFO CARD =================
+        doc.setFillColor(240, 247, 255);
+        doc.setDrawColor(37, 117, 252);
+        doc.setLineWidth(0.5);
+        doc.roundedRect(margin, y, contentWidth, 25, 3, 3, "FD");
+
+        // Customer name
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.setTextColor(37, 117, 252);
+        doc.text(customer.name, margin + 10, y + 10);
+
+        // Current owing amount
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 0);
+        doc.text("Current Owing:", margin + 10, y + 20);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(37, 117, 252);
+        doc.text(formatPdfCurrency(customer.owing), margin + contentWidth - 10, y + 20, { align: "right" });
+
+        y += 35;
+
+        // ================= TABLE HEADER =================
+        function drawTableHeader() {
+            doc.setFillColor(37, 117, 252);
+            doc.rect(margin, y, contentWidth, 8, "F");
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9);
+            doc.setTextColor(255, 255, 255);
+
+            doc.text("Date", margin + 3, y + 5);
+            doc.text("Source", margin + 45, y + 5);
+            doc.text("Description", margin + 90, y + 5);
+            doc.text("Qty", margin + 150, y + 5);
+            doc.text("Amount (RWF)", margin + 170, y + 5);
+
+            y += 10;
+            doc.setTextColor(0, 0, 0);
+            doc.setFont("helvetica", "normal");
+        }
+
+        drawTableHeader();
+
+        // ================= DEBT EVENTS =================
+        events.forEach((event, index) => {
+            // Check if we need a new page
+            if (y + 15 > pageHeight - 25) {
+                doc.addPage();
+                y = 30;
+                drawTableHeader();
+            }
+
+            // Light background for alternating rows
+            if (index % 2 === 0) {
+                doc.setFillColor(250, 250, 250);
+                doc.rect(margin, y - 2, contentWidth, 12, "F");
+            }
+
+            // Event row
+            doc.setFontSize(9);
+            
+            // Date
+            doc.setFont("helvetica", "normal");
+            const dateStr = formatPdfDateTime(event.date);
+            doc.text(dateStr, margin + 3, y + 3);
+            
+            // Source with color coding
+            if (event.source.includes('Credit')) {
+                doc.setTextColor(200, 0, 0);
+            } else if (event.source.includes('Reduction') || event.source.includes('Cleared')) {
+                doc.setTextColor(34, 139, 34);
+            } else {
+                doc.setTextColor(150, 100, 0);
+            }
+            doc.text(safe(event.source, 15), margin + 45, y + 3);
+            
+            // Description
+            doc.setTextColor(80, 80, 80);
+            doc.text(safe(event.description, 25), margin + 90, y + 3);
+            
+            // Quantity
+            doc.setTextColor(0, 0, 0);
+            doc.text(event.qty ? event.qty.toString() : '-', margin + 152, y + 3);
+            
+            // Amount
+            doc.setFont("helvetica", "bold");
+            if (event.amount > 0) {
+                doc.setTextColor(200, 0, 0);
+            } else if (event.amount < 0) {
+                doc.setTextColor(34, 139, 34);
+            } else {
+                doc.setTextColor(37, 117, 252);
+            }
+            doc.text(formatPdfCurrency(event.amount), margin + 170, y + 3);
+            
+            y += 10;
+            
+            // Add item details for credit sales if available
+            if (event.source.includes('Credit') && event.description && event.description.length > 25) {
+                doc.setFont("helvetica", "italic");
+                doc.setFontSize(8);
+                doc.setTextColor(120, 120, 120);
+                doc.text("- " + event.description, margin + 15, y - 2);
+                y += 4;
+            }
+        });
+
+        // ================= SUMMARY SECTION =================
+        y += 8;
+
+        // Check if we need a new page for summary
+        if (y + 30 > pageHeight - 20) {
+            doc.addPage();
+            y = 30;
+        }
+
+        // Summary card
+        doc.setFillColor(240, 247, 255);
+        doc.setDrawColor(37, 117, 252);
+        doc.setLineWidth(0.5);
+        doc.roundedRect(margin, y, contentWidth, 36, 3, 3, "FD");
+
+        // Calculate totals
+        const totalFromSales = salesRecords.reduce((s, r) => s + (Number(r.total || r.amount || 0)), 0);
+        const totalManual = manualDebtEntries.reduce((s, r) => s + (Number(r.amount || 0)), 0);
+        const totalReductions = debtAdjustments
+            .filter((entry) => Number(entry.amount || 0) < 0)
+            .reduce((s, entry) => s + Math.abs(Number(entry.amount || 0)), 0);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(37, 117, 252);
+        doc.text("DEBT SUMMARY", margin + 10, y + 8);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(80, 80, 80);
+        
+        let summaryY = y + 15;
+        
+        doc.text("Credit Sales Total:", margin + 10, summaryY);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(200, 0, 0);
+        doc.text(formatPdfCurrency(totalFromSales), margin + contentWidth - 10, summaryY, { align: "right" });
+        
+        summaryY += 6;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(80, 80, 80);
+        doc.text("Manual Entries Total:", margin + 10, summaryY);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(150, 100, 0);
+        doc.text(formatPdfCurrency(totalManual), margin + contentWidth - 10, summaryY, { align: "right" });
+        
+        summaryY += 6;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(80, 80, 80);
+        doc.text("Debt Reductions Total:", margin + 10, summaryY);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(34, 139, 34);
+        doc.text(formatPdfCurrency(totalReductions), margin + contentWidth - 10, summaryY, { align: "right" });
+
+        summaryY += 8;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(37, 117, 252);
+        doc.text("GRAND TOTAL OWING:", margin + 10, summaryY);
+        doc.setFontSize(12);
+        doc.text(formatPdfCurrency(customer.owing), margin + contentWidth - 10, summaryY, { align: "right" });
+
+        y = summaryY + 15;
+
+        // Save the PDF
+        const filename = customer.name.replace(/\s+/g, '_') + "-debt-history-" + new Date().toISOString().split('T')[0] + ".pdf";
+        applyPdfBrandFooter(doc, reportTitle);
+        doc.save(filename);
+        
+        showSuccessToast('Customer debt history PDF exported successfully.');
+        
+    } catch (err) {
+        console.error('exportCustomerDebtPDF error', err);
+        alert('Error exporting customer debt PDF: ' + (err.message || err));
+    }
+}
+
+function exportDailyPDF(doc, startY, margin) {
+    const selectedDate = (document.getElementById('dailyReportDate')?.value) || getTodayISODate();
+    const { dayStart: today, dayEnd } = getDayRange(selectedDate);
+
+    const dailySales = sales.filter(sale => {
+        const saleDate = new Date(sale.date);
+        return saleDate >= today && saleDate < dayEnd;
+    });
+    
+    let yPos = startY;
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    const tableWidth = pageWidth - (2 * margin);
+    
+    yPos = drawPdfTitleBlock(doc, yPos, margin, 'Daily Report', [
+        `Date: ${formatPdfDate(today, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`,
+        `Generated: ${new Date().toLocaleString()}`
+    ]);
+    
+    const totalSales = dailySales.reduce((sum, s) => sum + (s.total || 0), 0);
+    const cashSales = dailySales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
+    const creditSales = dailySales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
+    const profit = calculateProfitFromSales(dailySales);
+    
+    // Summary Box
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 2, tableWidth, 18, 'F');
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 5, yPos + 3);
+    doc.text(`Transactions: ${dailySales.length}`, margin + 80, yPos + 3);
+    doc.setTextColor(0, 100, 200);
+    doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    doc.setTextColor(0);
+    yPos += 25;
+    
+    // DRINKS SOLD TABLE
+    if (dailySales.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('GOODS SOLD', margin, yPos);
+        yPos += 7;
+        
+        const drinkSales = {};
+        const drinkValues = {};
+        dailySales.forEach(sale => {
+            if (!drinkSales[sale.drinkName]) {
+                drinkSales[sale.drinkName] = 0;
+                drinkValues[sale.drinkName] = 0;
+            }
+            drinkSales[sale.drinkName] += (sale.quantity || 0);
+            drinkValues[sale.drinkName] += (sale.total || 0);
+        });
+        
+        // Table headers
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(37, 117, 252);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Drink Name', margin + 3, yPos);
+        doc.text('Qty', margin + 120, yPos);
+        doc.text('Amount', margin + 150, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        Object.entries(drinkSales)
+            .sort((a, b) => b[1] - a[1])
+            .forEach(([drink, qty], idx) => {
+                if (idx % 2 === 0) {
+                    doc.setFillColor(250, 250, 250);
+                    doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+                }
+                doc.text(drink, margin + 3, yPos);
+                doc.text(qty.toString(), margin + 125, yPos);
+                doc.text(`RWF ${drinkValues[drink].toLocaleString()}`, margin + 150, yPos);
+                yPos += 7;
+            });
+        yPos += 3;
+    }
+    
+    // TRANSACTIONS SECTION
+    if (dailySales.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('RECENT TRANSACTIONS', margin, yPos);
+        yPos += 7;
+        
+        // Table headers
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(37, 117, 252);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Time', margin + 3, yPos);
+        doc.text('Item', margin + 30, yPos);
+        doc.text('Qty', margin + 120, yPos);
+        doc.text('Type', margin + 140, yPos);
+        doc.text('Amount', margin + 165, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(8);
+        dailySales.slice(-10).reverse().forEach((sale, idx) => {
+            if (yPos > pageHeight - 20) {
+                doc.addPage();
+                yPos = 20;
+            }
+            if (idx % 2 === 0) {
+                doc.setFillColor(250, 250, 250);
+                doc.rect(margin, yPos - 4, tableWidth, 5, 'F');
+            }
+            const time = new Date(sale.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            doc.text(time, margin + 3, yPos);
+            doc.text(sale.drinkName.substring(0, 18), margin + 30, yPos);
+            doc.text((sale.quantity || 0).toString(), margin + 120, yPos);
+            doc.text(sale.type === 'normal' ? 'Cash' : 'Credit', margin + 140, yPos);
+            doc.text(`RWF ${(sale.total || 0).toLocaleString()}`, margin + 165, yPos);
+            yPos += 5;
+        });
+        yPos += 5;
+    }
+    
+    // CUSTOMERS IN DEBT TABLE
+    const customersInDebt = customers.filter(c => c.owing > 0);
+    if (customersInDebt.length > 0) {
+        if (yPos > pageHeight - 40) {
+            doc.addPage();
+            yPos = 20;
+        }
+        
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('CUSTOMERS IN DEBT', margin, yPos);
+        yPos += 7;
+        
+        // Table headers
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(230, 76, 76);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Customer Name', margin + 3, yPos);
+        doc.text('Amount Owed', margin + 130, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        const totalDebt = customersInDebt.reduce((sum, c) => sum + (c.owing || 0), 0);
+        
+        customersInDebt
+            .sort((a, b) => b.owing - a.owing)
+            .forEach((customer, idx) => {
+                if (yPos > pageHeight - 15) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+                if (idx % 2 === 0) {
+                    doc.setFillColor(255, 240, 240);
+                    doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+                }
+                doc.text(customer.name, margin + 3, yPos);
+                doc.text(`RWF ${customer.owing.toLocaleString()}`, margin + 130, yPos);
+                yPos += 7;
+            });
+        
+        // Total debt line
+        yPos += 2;
+        doc.setFillColor(240, 200, 200);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.setFont(undefined, 'bold');
+        doc.text('TOTAL DEBT:', margin + 3, yPos);
+        doc.text(`RWF ${totalDebt.toLocaleString()}`, margin + 130, yPos);
+    }
+}
+
+function exportWeeklyPDF(doc, startY, margin) {
+    const today = new Date();
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    
+    const weeklySales = sales.filter(sale => {
+        const saleDate = new Date(sale.date);
+        return saleDate >= weekAgo;
+    });
+    
+    let yPos = startY;
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    const tableWidth = pageWidth - (2 * margin);
+    
+    yPos = drawPdfTitleBlock(doc, yPos, margin, 'Weekly Report', [
+        `Period: ${formatPdfDate(weekAgo)} to ${formatPdfDate(today)}`,
+        `Generated: ${new Date().toLocaleString()}`
+    ]);
+    
+    const totalSales = weeklySales.reduce((sum, s) => sum + (s.total || 0), 0);
+    const profit = calculateProfitFromSales(weeklySales);
+    const cashSales = weeklySales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
+    const creditSales = weeklySales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
+    
+    // Summary Box
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 2, tableWidth, 18, 'F');
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 5, yPos + 3);
+    doc.text(`Transactions: ${weeklySales.length}`, margin + 80, yPos + 3);
+    doc.setTextColor(0, 100, 200);
+    doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    doc.setTextColor(0);
+    yPos += 25;
+    
+    // TOP DRINKS TABLE
+    if (weeklySales.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('TOP GOODS SOLD (WEEKLY)', margin, yPos);
+        yPos += 7;
+        
+        const drinkSales = {};
+        const drinkValues = {};
+        weeklySales.forEach(sale => {
+            if (!drinkSales[sale.drinkName]) {
+                drinkSales[sale.drinkName] = 0;
+                drinkValues[sale.drinkName] = 0;
+            }
+            drinkSales[sale.drinkName] += (sale.quantity || 0);
+            drinkValues[sale.drinkName] += (sale.total || 0);
+        });
+        
+        // Table headers
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(37, 117, 252);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Product', margin + 3, yPos);
+        doc.text('Qty', margin + 120, yPos);
+        doc.text('Revenue', margin + 150, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        Object.entries(drinkSales)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .forEach(([drink, qty], idx) => {
+                if (idx % 2 === 0) {
+                    doc.setFillColor(250, 250, 250);
+                    doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+                }
+                doc.text(drink, margin + 3, yPos);
+                doc.text(qty.toString(), margin + 125, yPos);
+                doc.text(`RWF ${drinkValues[drink].toLocaleString()}`, margin + 150, yPos);
+                yPos += 7;
+            });
+        yPos += 5;
+    }
+    
+    // SALES BY DAY
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('DAILY BREAKDOWN', margin, yPos);
+    yPos += 7;
+    
+    const salesByDay = {};
+    weeklySales.forEach(sale => {
+        const date = new Date(sale.date).toLocaleDateString();
+        if (!salesByDay[date]) salesByDay[date] = 0;
+        salesByDay[date] += (sale.total || 0);
+    });
+    
+    // Table headers
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    doc.setFillColor(37, 117, 252);
+    doc.setTextColor(255, 255, 255);
+    doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+    doc.text('Date', margin + 3, yPos);
+    doc.text('Sales Count', margin + 80, yPos);
+    doc.text('Total Amount', margin + 130, yPos);
+    yPos += 8;
+    
+    doc.setTextColor(0);
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(9);
+    Object.entries(salesByDay)
+        .sort()
+        .forEach((entry, idx) => {
+            const dayCount = weeklySales.filter(s => new Date(s.date).toLocaleDateString() === entry[0]).length;
+            if (idx % 2 === 0) {
+                doc.setFillColor(250, 250, 250);
+                doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+            }
+            doc.text(entry[0], margin + 3, yPos);
+            doc.text(dayCount.toString(), margin + 80, yPos);
+            doc.text(`RWF ${entry[1].toLocaleString()}`, margin + 130, yPos);
+            yPos += 6;
+        });
+    yPos += 5;
+    
+    // PAYMENT BREAKDOWN
+    if (yPos > pageHeight - 30) {
+        doc.addPage();
+        yPos = 20;
+    }
+    
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('PAYMENT METHOD BREAKDOWN', margin, yPos);
+    yPos += 7;
+    
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 2, tableWidth, 14, 'F');
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    const cashPercent = totalSales > 0 ? Math.round(cashSales / totalSales * 100) : 0;
+    const creditPercent = totalSales > 0 ? Math.round(creditSales / totalSales * 100) : 0;
+    doc.text(`Cash Sales: RWF ${cashSales.toLocaleString()} (${cashPercent}%)`, margin + 5, yPos + 2);
+    doc.text(`Credit Sales: RWF ${creditSales.toLocaleString()} (${creditPercent}%)`, margin + 5, yPos + 8);
+}
+
+function exportMonthlyPDF(doc, startY, margin) {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    const monthlySales = sales.filter(sale => {
+        const saleDate = new Date(sale.date);
+        return saleDate >= firstDay;
+    });
+    
+    let yPos = startY;
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    const tableWidth = pageWidth - (2 * margin);
+    
+    yPos = drawPdfTitleBlock(doc, yPos, margin, 'Monthly Report', [
+        `Month: ${formatPdfDate(today, { month: 'long', year: 'numeric' })}`,
+        `Generated: ${new Date().toLocaleString()}`
+    ]);
+    
+    const totalSales = monthlySales.reduce((sum, s) => sum + (s.total || 0), 0);
+    const profit = calculateProfitFromSales(monthlySales);
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const cashSales = monthlySales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
+    const creditSales = monthlySales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
+    
+    // Summary Box
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 2, tableWidth, 18, 'F');
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 5, yPos + 3);
+    doc.text(`Transactions: ${monthlySales.length}`, margin + 80, yPos + 3);
+    doc.setTextColor(0, 100, 200);
+    doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    doc.setTextColor(0);
+    yPos += 25;
+    
+    // TOP GOODS TABLE
+    if (monthlySales.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('TOP GOODS SOLD (MONTHLY)', margin, yPos);
+        yPos += 7;
+        
+        const drinkSales = {};
+        const drinkValues = {};
+        monthlySales.forEach(sale => {
+            if (!drinkSales[sale.drinkName]) {
+                drinkSales[sale.drinkName] = 0;
+                drinkValues[sale.drinkName] = 0;
+            }
+            drinkSales[sale.drinkName] += (sale.quantity || 0);
+            drinkValues[sale.drinkName] += (sale.total || 0);
+        });
+        
+        // Table headers
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(37, 117, 252);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Product', margin + 3, yPos);
+        doc.text('Qty', margin + 120, yPos);
+        doc.text('Revenue', margin + 150, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        Object.entries(drinkSales)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .forEach(([drink, qty], idx) => {
+                if (idx % 2 === 0) {
+                    doc.setFillColor(250, 250, 250);
+                    doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+                }
+                doc.text(drink, margin + 3, yPos);
+                doc.text(qty.toString(), margin + 125, yPos);
+                doc.text(`RWF ${drinkValues[drink].toLocaleString()}`, margin + 150, yPos);
+                yPos += 7;
+            });
+        yPos += 5;
+    }
+    
+    // CUSTOMERS IN DEBT
+    const customersInDebt = customers.filter(c => c.owing > 0);
+    if (customersInDebt.length > 0) {
+        if (yPos > pageHeight - 40) {
+            doc.addPage();
+            yPos = 20;
+        }
+        
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('CUSTOMERS IN DEBT', margin, yPos);
+        yPos += 7;
+        
+        // Table headers
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(230, 76, 76);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Customer Name', margin + 3, yPos);
+        doc.text('Amount Owed', margin + 130, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        const totalDebt = customersInDebt.reduce((sum, c) => sum + (c.owing || 0), 0);
+        
+        customersInDebt
+            .sort((a, b) => b.owing - a.owing)
+            .forEach((customer, idx) => {
+                if (yPos > pageHeight - 15) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+                if (idx % 2 === 0) {
+                    doc.setFillColor(255, 240, 240);
+                    doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+                }
+                doc.text(customer.name, margin + 3, yPos);
+                doc.text(`RWF ${customer.owing.toLocaleString()}`, margin + 130, yPos);
+                yPos += 7;
+            });
+        
+        yPos += 2;
+        doc.setFillColor(240, 200, 200);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.setFont(undefined, 'bold');
+        doc.text('TOTAL DEBT:', margin + 3, yPos);
+        doc.text(`RWF ${totalDebt.toLocaleString()}`, margin + 130, yPos);
+    }
+}
+
+function exportAnnualPDF(doc, startY, margin) {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), 0, 1);
+    
+    const annualSales = sales.filter(sale => {
+        const saleDate = new Date(sale.date);
+        return saleDate >= firstDay;
+    });
+    
+    let yPos = startY;
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    const tableWidth = pageWidth - (2 * margin);
+    
+    // Title
+    doc.setFontSize(20);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(37, 117, 252);
+    doc.text('ANNUAL REPORT', margin, yPos);
+    doc.setTextColor(0);
+    yPos += 12;
+    
+    // Year info
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Year: ${today.getFullYear()}`, margin, yPos);
+    doc.text(`Generated: ${new Date().toLocaleTimeString()}`, pageWidth - margin - 50, yPos);
+    yPos += 12;
+    
+    // Divider
+    doc.setDrawColor(37, 117, 252);
+    doc.setLineWidth(0.5);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 8;
+    
+    const totalSales = annualSales.reduce((sum, s) => sum + (s.total || 0), 0);
+    const profit = calculateProfitFromSales(annualSales);
+    const cashSales = annualSales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
+    const creditSales = annualSales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
+    
+    // Summary Box
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 2, tableWidth, 18, 'F');
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 5, yPos + 3);
+    doc.text(`Transactions: ${annualSales.length}`, margin + 80, yPos + 3);
+    doc.setTextColor(0, 100, 200);
+    doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    doc.setTextColor(0);
+    yPos += 25;
+    
+    // TOP GOODS TABLE
+    if (annualSales.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('TOP GOODS SOLD (ANNUAL)', margin, yPos);
+        yPos += 7;
+        
+        const drinkSales = {};
+        const drinkValues = {};
+        annualSales.forEach(sale => {
+            if (!drinkSales[sale.drinkName]) {
+                drinkSales[sale.drinkName] = 0;
+                drinkValues[sale.drinkName] = 0;
+            }
+            drinkSales[sale.drinkName] += (sale.quantity || 0);
+            drinkValues[sale.drinkName] += (sale.total || 0);
+        });
+        
+        // Table headers
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(37, 117, 252);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Product', margin + 3, yPos);
+        doc.text('Qty Sold', margin + 100, yPos);
+        doc.text('Total Revenue', margin + 140, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        Object.entries(drinkSales)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 12)
+            .forEach(([drink, qty], idx) => {
+                if (idx % 2 === 0) {
+                    doc.setFillColor(250, 250, 250);
+                    doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+                }
+                doc.text(drink, margin + 3, yPos);
+                doc.text(qty.toString(), margin + 100, yPos);
+                doc.text(`RWF ${drinkValues[drink].toLocaleString()}`, margin + 140, yPos);
+                yPos += 7;
+            });
+        yPos += 5;
+    }
+    
+    // MONTHLY BREAKDOWN
+    if (yPos > pageHeight - 40) {
+        doc.addPage();
+        yPos = 20;
+    }
+    
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('MONTHLY BREAKDOWN', margin, yPos);
+    yPos += 7;
+    
+    const salesByMonth = {};
+    annualSales.forEach(sale => {
+        const month = new Date(sale.date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        if (!salesByMonth[month]) salesByMonth[month] = 0;
+        salesByMonth[month] += (sale.total || 0);
+    });
+    
+    // Table headers
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    doc.setFillColor(37, 117, 252);
+    doc.setTextColor(255, 255, 255);
+    doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+    doc.text('Month', margin + 3, yPos);
+    doc.text('Sales Count', margin + 80, yPos);
+    doc.text('Total Amount', margin + 130, yPos);
+    yPos += 8;
+    
+    doc.setTextColor(0);
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(9);
+    Object.entries(salesByMonth).forEach((entry, idx) => {
+        const monthCount = annualSales.filter(s => new Date(s.date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }) === entry[0]).length;
+        if (idx % 2 === 0) {
+            doc.setFillColor(250, 250, 250);
+            doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+        }
+        doc.text(entry[0], margin + 3, yPos);
+        doc.text(monthCount.toString(), margin + 80, yPos);
+        doc.text(`RWF ${entry[1].toLocaleString()}`, margin + 130, yPos);
+        yPos += 6;
+    });
+    yPos += 5;
+    
+    // CUSTOMERS IN DEBT
+    const customersInDebt = customers.filter(c => c.owing > 0);
+    if (customersInDebt.length > 0) {
+        if (yPos > pageHeight - 40) {
+            doc.addPage();
+            yPos = 20;
+        }
+        
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('CUSTOMERS IN DEBT', margin, yPos);
+        yPos += 7;
+        
+        // Table headers
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(230, 76, 76);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Customer Name', margin + 3, yPos);
+        doc.text('Amount Owed', margin + 130, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        const totalDebt = customersInDebt.reduce((sum, c) => sum + (c.owing || 0), 0);
+        
+        customersInDebt
+            .sort((a, b) => b.owing - a.owing)
+            .forEach((customer, idx) => {
+                if (yPos > pageHeight - 15) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+                if (idx % 2 === 0) {
+                    doc.setFillColor(255, 240, 240);
+                    doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+                }
+                doc.text(customer.name, margin + 3, yPos);
+                doc.text(`RWF ${customer.owing.toLocaleString()}`, margin + 130, yPos);
+                yPos += 7;
+            });
+        
+        yPos += 2;
+        doc.setFillColor(240, 200, 200);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.setFont(undefined, 'bold');
+        doc.text('TOTAL DEBT:', margin + 3, yPos);
+        doc.text(`RWF ${totalDebt.toLocaleString()}`, margin + 130, yPos);
+    }
+}
+
+function exportFullPDF(doc, startY, margin) {
+    const totalSales = sales.reduce((sum, s) => sum + (s.total || 0), 0);
+    const profit = calculateProfitFromSales(sales);
+    const totalCustomers = customers.length;
+    const totalDebt = customers.reduce((sum, c) => sum + (c.owing || 0), 0);
+    const cashSales = sales.filter(s => s.type === 'normal').reduce((sum, s) => sum + (s.total || 0), 0);
+    const creditSales = sales.filter(s => s.type === 'credit').reduce((sum, s) => sum + (s.total || 0), 0);
+    
+    let yPos = startY;
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    const tableWidth = pageWidth - (2 * margin);
+    
+    // Title
+    doc.setFontSize(20);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(37, 117, 252);
+    doc.text('FULL BUSINESS REPORT', margin, yPos);
+    doc.setTextColor(0);
+    yPos += 12;
+    
+    // Date generated
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPos);
+    doc.text(`Records: ${sales.length} transactions`, pageWidth - margin - 70, yPos);
+    yPos += 12;
+    
+    // Divider
+    doc.setDrawColor(37, 117, 252);
+    doc.setLineWidth(0.5);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 8;
+    
+    // Overall Summary Box
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 2, tableWidth, 18, 'F');
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 5, yPos + 3);
+    doc.text(`Total Customers: ${totalCustomers}`, margin + 80, yPos + 3);
+    doc.setTextColor(0, 100, 200);
+    doc.text(`Profit: RWF ${profit.toLocaleString()}`, margin + 140, yPos + 3);
+    doc.setTextColor(0);
+    yPos += 25;
+    
+    // TOP GOODS (ALL TIME)
+    if (sales.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('TOP GOODS SOLD (ALL TIME)', margin, yPos);
+        yPos += 7;
+        
+        const drinkSales = {};
+        const drinkValues = {};
+        sales.forEach(sale => {
+            if (!drinkSales[sale.drinkName]) {
+                drinkSales[sale.drinkName] = 0;
+                drinkValues[sale.drinkName] = 0;
+            }
+            drinkSales[sale.drinkName] += (sale.quantity || 0);
+            drinkValues[sale.drinkName] += (sale.total || 0);
+        });
+        
+        // Table headers
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(37, 117, 252);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Product', margin + 3, yPos);
+        doc.text('Total Qty', margin + 100, yPos);
+        doc.text('Total Revenue', margin + 140, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        Object.entries(drinkSales)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 15)
+            .forEach(([drink, qty], idx) => {
+                if (idx % 2 === 0) {
+                    doc.setFillColor(250, 250, 250);
+                    doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+                }
+                doc.text(drink, margin + 3, yPos);
+                doc.text(qty.toString(), margin + 100, yPos);
+                doc.text(`RWF ${drinkValues[drink].toLocaleString()}`, margin + 140, yPos);
+                yPos += 7;
+            });
+        yPos += 5;
+    }
+    
+    // SALES SUMMARY BY TYPE
+    if (yPos > pageHeight - 30) {
+        doc.addPage();
+        yPos = 20;
+    }
+    
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('PAYMENT METHOD ANALYSIS', margin, yPos);
+    yPos += 7;
+    
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 2, tableWidth, 14, 'F');
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    const cashPercent = totalSales > 0 ? Math.round(cashSales / totalSales * 100) : 0;
+    const creditPercent = totalSales > 0 ? Math.round(creditSales / totalSales * 100) : 0;
+    doc.text(`Cash Sales: RWF ${cashSales.toLocaleString()} (${cashPercent}%)`, margin + 5, yPos + 2);
+    doc.text(`Credit Sales: RWF ${creditSales.toLocaleString()} (${creditPercent}%)`, margin + 5, yPos + 8);
+    yPos += 20;
+    
+    // CUSTOMERS IN DEBT
+    const customersInDebt = customers.filter(c => c.owing > 0);
+    if (customersInDebt.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('CUSTOMERS IN DEBT', margin, yPos);
+        yPos += 7;
+        
+        // Table headers
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.setFillColor(230, 76, 76);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.text('Customer Name', margin + 3, yPos);
+        doc.text('Amount Owed', margin + 130, yPos);
+        yPos += 8;
+        
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(9);
+        const totalDebtAmount = customersInDebt.reduce((sum, c) => sum + (c.owing || 0), 0);
+        
+        customersInDebt
+            .sort((a, b) => b.owing - a.owing)
+            .slice(0, 20)
+            .forEach((customer, idx) => {
+                if (yPos > pageHeight - 15) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+                if (idx % 2 === 0) {
+                    doc.setFillColor(255, 240, 240);
+                    doc.rect(margin, yPos - 5, tableWidth, 6, 'F');
+                }
+                doc.text(customer.name, margin + 3, yPos);
+                doc.text(`RWF ${customer.owing.toLocaleString()}`, margin + 130, yPos);
+                yPos += 6;
+            });
+        
+        yPos += 2;
+        doc.setFillColor(240, 200, 200);
+        doc.rect(margin, yPos - 5, tableWidth, 7, 'F');
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(10);
+        doc.text('TOTAL DEBT:', margin + 3, yPos);
+        doc.text(`RWF ${totalDebtAmount.toLocaleString()}`, margin + 130, yPos);
+    } else {
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'normal');
+        doc.text('No customers in debt - Excellent!', margin, yPos);
+    }
+}
+
+// Auto-save before page unload
+window.addEventListener('beforeunload', () => {
+    flushDataSyncOnExit(activeUser);
+    if (!isElectron) {
+        void optimizedSaveData();
+    }
+    if (autoSaveInterval) {
+        clearInterval(autoSaveInterval);
+    }
+});
+
+// ================= SALES HISTORY FUNCTIONS =================
+function getSalesHistoryFilteredSales() {
+    const searchTerm = (document.getElementById('salesSearch')?.value || '').trim().toLowerCase();
+    const selectedDate = document.getElementById('salesHistoryDate')?.value || '';
+
+    return sales.filter((sale) => {
+        if (selectedSalesHistoryType !== 'all' && sale.type !== selectedSalesHistoryType) return false;
+
+        if (selectedDate) {
+            const { dayStart, dayEnd } = getDayRange(selectedDate);
+            const saleDate = new Date(sale.date);
+            if (!(saleDate >= dayStart && saleDate < dayEnd)) return false;
+        }
+
+        if (!searchTerm) return true;
+        const customerName = sale.customerId !== null && customers[sale.customerId] ? customers[sale.customerId].name : 'Guest';
+        return (
+            (sale.drinkName && sale.drinkName.toLowerCase().includes(searchTerm)) ||
+            (customerName && customerName.toLowerCase().includes(searchTerm)) ||
+            (sale.date && new Date(sale.date).toLocaleDateString().toLowerCase().includes(searchTerm))
+        );
+    });
+}
+
+function renderSalesHistoryRows(filteredSales) {
+    const tbody = document.getElementById('salesHistoryBody');
+    if (!tbody) return;
+    clearElement(tbody);
+
+    if (!filteredSales || filteredSales.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="padding: 40px; text-align: center; color: #999;">No sales found</td></tr>';
+        return;
+    }
+
+    const transactions = {};
+    const sortedSales = [...filteredSales].sort((a, b) => new Date(b.date) - new Date(a.date));
+    sortedSales.forEach((sale) => {
+        const saleDate = new Date(sale.date);
+        const timeKey = `${saleDate.toISOString().slice(0, 16)}|${sale.customerId || 'guest'}|${sale.type}`;
+        if (!transactions[timeKey]) {
+            transactions[timeKey] = {
+                date: sale.date,
+                customerId: sale.customerId,
+                type: sale.type,
+                items: [],
+                totalAmount: 0,
+                ids: []
+            };
+        }
+        transactions[timeKey].items.push(sale);
+        transactions[timeKey].totalAmount += (sale.total || 0);
+        if (sale.id) transactions[timeKey].ids.push(sale.id);
+    });
+
+    Object.values(transactions).forEach((transaction) => {
+        const saleDate = new Date(transaction.date);
+        const dateStr = saleDate.toLocaleDateString() + ' ' + saleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const customerName = transaction.customerId !== null && customers[transaction.customerId] ? customers[transaction.customerId].name : 'Guest';
+        const saleTypeDisplay = transaction.type === 'credit'
+            ? '<span style="background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px;">Credit</span>'
+            : '<span style="background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px;">Cash</span>';
+        const itemsText = transaction.items.length > 1 ? `${transaction.items.length} items` : (transaction.items[0]?.drinkName || 'Unknown');
+        const idsArray = transaction.ids.length > 0 ? transaction.ids : transaction.items.map(i => i.id).filter(id => id);
+
+        const detailsButton = `<button onclick="showTransactionDetails('${JSON.stringify(transaction.items).replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" style="padding: 6px 12px; background: #2575fc; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; margin-right: 8px;">📋 Details</button>`;
+        const deleteButton = idsArray.length > 0
+            ? `<button onclick="deleteTransaction([${idsArray.join(',')}])" style="padding: 6px 10px; font-size: 12px; margin: 2px; background: #ff6b6b; color: white; border: none; border-radius: 4px; cursor: pointer;">🗑️</button>`
+            : '';
+
+        const row = document.createElement('tr');
+        row.style.borderBottom = '1px solid #e1e5e9';
+        row.innerHTML = `
+            <td style="padding: 15px;">${dateStr}</td>
+            <td style="padding: 15px;"><strong>${escapeHtml(itemsText)}</strong></td>
+            <td style="padding: 15px; text-align: center;">${transaction.items.reduce((sum, item) => sum + (item.quantity || 0), 0)}</td>
+            <td style="padding: 15px; text-align: right;">RWF ${transaction.items.length > 0 ? (transaction.items[0].price || 0).toLocaleString() : '0'}</td>
+            <td style="padding: 15px; text-align: right; font-weight: 600; color: #2575fc;">RWF ${transaction.totalAmount.toLocaleString()}</td>
+            <td style="padding: 15px; text-align: center;">${saleTypeDisplay}</td>
+            <td style="padding: 15px; text-align: center;">${escapeHtml(customerName)}</td>
+            <td style="padding: 15px; text-align: center;">${detailsButton}${deleteButton}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function applySalesHistoryFilters() {
+    renderSalesHistoryRows(getSalesHistoryFilteredSales());
+}
+
+function goToTodaySalesHistory() {
+    const dateInput = document.getElementById('salesHistoryDate');
+    if (dateInput) dateInput.value = getTodayISODate();
+    applySalesHistoryFilters();
+}
+
+function displaySalesHistory() {
+    applySalesHistoryFilters();
+    return;
+    const tbody = document.getElementById('salesHistoryBody');
+    if (!tbody) return;
+    
+    clearElement(tbody);
+    
+    if (!sales || sales.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="padding: 40px; text-align: center; color: #999;">No sales recorded yet</td></tr>';
+        return;
+    }
+    
+    // Group sales by transaction (using date and customer as key)
+    const transactions = {};
+    const sortedSales = [...sales].sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    sortedSales.forEach((sale) => {
+        // Create a unique key for the transaction - group by time (minute) and customer
+        const saleDate = new Date(sale.date);
+        const timeKey = `${saleDate.toISOString().slice(0, 16)}|${sale.customerId || 'guest'}|${sale.type}`;
+        
+        if (!transactions[timeKey]) {
+            transactions[timeKey] = {
+                date: sale.date,
+                customerId: sale.customerId,
+                type: sale.type,
+                items: [],
+                totalAmount: 0,
+                ids: []
+            };
+        }
+        transactions[timeKey].items.push(sale);
+        transactions[timeKey].totalAmount += (sale.total || 0);
+        if (sale.id) {
+            transactions[timeKey].ids.push(sale.id);
+        }
+    });
+    
+    // Display consolidated transactions
+    Object.values(transactions).forEach((transaction) => {
+        const saleDate = new Date(transaction.date);
+        const dateStr = saleDate.toLocaleDateString() + ' ' + saleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const customerName = transaction.customerId !== null && customers[transaction.customerId] ? 
+            customers[transaction.customerId].name : 'Guest';
+        const saleTypeDisplay = transaction.type === 'credit' ? 
+            '<span style="background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px;">Credit</span>' : 
+            '<span style="background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px;">Cash</span>';
+        
+        const itemsText = transaction.items.length > 1 ? 
+            `${transaction.items.length} items` : 
+            (transaction.items[0]?.drinkName || 'Unknown');
+        
+        const row = document.createElement('tr');
+        row.style.borderBottom = '1px solid #e1e5e9';
+        
+        // Create IDs array for deletion
+        const idsArray = transaction.ids.length > 0 ? transaction.ids : 
+            transaction.items.map(i => i.id).filter(id => id);
+        
+        const detailsButton = `<button onclick="showTransactionDetails('${JSON.stringify(transaction.items).replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" style="padding: 6px 12px; background: #2575fc; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; margin-right: 8px;">Details</button>`;
+        
+        let deleteButton = '';
+        if (idsArray.length > 0) {
+            deleteButton = `<button onclick="deleteTransaction([${idsArray.join(',')}])" style="padding: 6px 10px; font-size: 12px; margin: 2px; background: #ff6b6b; color: white; border: none; border-radius: 4px; cursor: pointer;">Delete</button>`;
+        }
+        
+        row.innerHTML = `
+            <td style="padding: 15px;">${dateStr}</td>
+            <td style="padding: 15px;"><strong>${escapeHtml(itemsText)}</strong></td>
+            <td style="padding: 15px; text-align: center;">${transaction.items.reduce((sum, item) => sum + (item.quantity || 0), 0)}</td>
+            <td style="padding: 15px; text-align: right;">RWF ${transaction.items.length > 0 ? (transaction.items[0].price || 0).toLocaleString() : '0'}</td>
+            <td style="padding: 15px; text-align: right; font-weight: 600; color: #2575fc;">RWF ${transaction.totalAmount.toLocaleString()}</td>
+            <td style="padding: 15px; text-align: center;">${saleTypeDisplay}</td>
+            <td style="padding: 15px; text-align: center;">${escapeHtml(customerName)}</td>
+            <td style="padding: 15px; text-align: center;">
+                ${detailsButton}
+                ${deleteButton}
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Delete an entire transaction by array of sale ids
+async function deleteTransaction(ids) {
+    if (!ids || ids.length === 0) {
+        alert('No transaction selected');
+        return;
+    }
+    
+    if (!confirm('Delete this transaction and all its items? This cannot be undone.')) return;
+
+    // Remove matching sales and adjust customer owing if needed
+    ids.forEach(id => {
+        const idx = sales.findIndex(s => s.id === id);
+        if (idx !== -1) {
+            const deletedSale = sales[idx];
+            if (deletedSale.type === 'credit' && deletedSale.customerId !== null && customers[deletedSale.customerId]) {
+                customers[deletedSale.customerId].owing = Math.max(0, (customers[deletedSale.customerId].owing || 0) - (deletedSale.total || 0));
+            }
+            sales.splice(idx, 1);
+        }
+    });
+
+    await optimizedSaveData();
+    displaySalesHistory();
+    updateHome();
+    showSuccessToast('Transaction deleted successfully.');
+}
+
+function showTransactionDetails(itemsJson) {
+    // Parse the items
+    let items = itemsJson;
+    if (typeof itemsJson === 'string') {
+        try {
+            items = JSON.parse(itemsJson.replace(/&quot;/g, '"'));
+        } catch (e) {
+            console.error('Error parsing transaction details:', e);
+            alert('Error displaying transaction details');
+            return;
+        }
+    }
+    
+    // Try to use modal if available
+    const modal = document.getElementById('transactionModal');
+    const modalBody = document.getElementById('transactionModalBody');
+    
+    if (!modal || !modalBody) {
+        // Fallback to alert
+        let detailsText = 'Transaction Items:\n\n';
+        let totalQty = 0;
+        let totalAmount = 0;
+        items.forEach((item, idx) => {
+            detailsText += `${idx + 1}. ${item.drinkName || 'Unknown'}\n   Qty: ${item.quantity || 0} x RWF ${Number(item.price || 0).toLocaleString()} = RWF ${Number(item.total || 0).toLocaleString()}\n\n`;
+            totalQty += (item.quantity || 0);
+            totalAmount += (item.total || 0);
+        });
+        detailsText += `\nTotal Items: ${totalQty}\nTotal Amount: RWF ${totalAmount.toLocaleString()}`;
+        showSuccessToast(detailsText);
+        return;
+    }
+
+    // Build HTML for modal
+    let html = `<h3 style="margin-top:0;color:#2575fc;">Transaction Details</h3>`;
+    html += '<div style="margin-top:8px;">';
+    let totalQty = 0;
+    let totalAmount = 0;
+    items.forEach((item, idx) => {
+        html += `<div style="padding:10px 0;border-bottom:1px solid #eee;">`;
+        html += `<div style="font-weight:700;">${idx + 1}. ${escapeHtml(item.drinkName || 'Unknown')}</div>`;
+        html += `<div style="color:#666;margin-top:6px;">Qty: ${item.quantity || 0} x RWF ${Number(item.price || 0).toLocaleString()} = <strong>RWF ${Number(item.total || 0).toLocaleString()}</strong></div>`;
+        html += `</div>`;
+        totalQty += (item.quantity || 0);
+        totalAmount += (item.total || 0);
+    });
+    html += `</div>`;
+    html += `<div style="margin-top:12px;font-weight:700;">Total Items: ${totalQty}</div>`;
+    html += `<div style="margin-top:6px;font-weight:700;color:#2575fc;">Total Amount: RWF ${totalAmount.toLocaleString()}</div>`;
+    modalBody.innerHTML = html;
+
+    // Show modal
+    modal.classList.add('show');
+
+    // Attach close handlers
+    if (!modal._closeAttached) {
+        modal.addEventListener('click', function(e) {
+            if (e.target.id === 'transactionModal' || e.target.classList.contains('modal-close') || e.target.classList.contains('modal-backdrop')) {
+                modal.classList.remove('show');
+            }
+        });
+        modal._closeAttached = true;
+    }
+}
+
+function filterSalesByType(type, event) {
+    selectedSalesHistoryType = type || 'all';
+
+    // Add active state to sales-history filter buttons only
+    const filterButtons = document.querySelectorAll('#salesHistory .filter-buttons .filter-btn');
+    filterButtons.forEach(btn => btn.classList.remove('active'));
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
+    applySalesHistoryFilters();
+    return;
+
+    const tbody = document.getElementById('salesHistoryBody');
+    if (!tbody) return;
+    
+    clearElement(tbody);
+    
+    let filtered = sales;
+    if (type === 'normal') {
+        filtered = sales.filter(s => s.type === 'normal');
+    } else if (type === 'credit') {
+        filtered = sales.filter(s => s.type === 'credit');
+    }
+    
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="padding: 40px; text-align: center; color: #999;">No sales found</td></tr>';
+        return;
+    }
+    
+    // Consolidate filtered sales into transactions
+    const transactions = {};
+    const sortedSales = [...filtered].sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    sortedSales.forEach((sale) => {
+        const saleDate = new Date(sale.date);
+        const timeKey = `${saleDate.toISOString().slice(0, 16)}|${sale.customerId || 'guest'}|${sale.type}`;
+        
+        if (!transactions[timeKey]) {
+            transactions[timeKey] = {
+                date: sale.date,
+                customerId: sale.customerId,
+                type: sale.type,
+                items: [],
+                totalAmount: 0,
+                ids: []
+            };
+        }
+        transactions[timeKey].items.push(sale);
+        transactions[timeKey].totalAmount += (sale.total || 0);
+        if (sale.id) {
+            transactions[timeKey].ids.push(sale.id);
+        }
+    });
+    
+    // Display consolidated transactions
+    Object.values(transactions).forEach((transaction) => {
+        const saleDate = new Date(transaction.date);
+        const dateStr = saleDate.toLocaleDateString() + ' ' + saleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const customerName = transaction.customerId !== null && customers[transaction.customerId] ? 
+            customers[transaction.customerId].name : 'Guest';
+        const saleTypeDisplay = transaction.type === 'credit' ? 
+            '<span style="background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px;">Credit</span>' : 
+            '<span style="background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px;">Cash</span>';
+        
+        const itemsText = transaction.items.length > 1 ? 
+            `${transaction.items.length} items` : 
+            (transaction.items[0]?.drinkName || 'Unknown');
+        
+        const row = document.createElement('tr');
+        row.style.borderBottom = '1px solid #e1e5e9';
+        
+        const idsArray = transaction.ids.length > 0 ? transaction.ids : 
+            transaction.items.map(i => i.id).filter(id => id);
+        
+        const detailsButton = `<button onclick="showTransactionDetails('${JSON.stringify(transaction.items).replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" style="padding: 6px 12px; background: #2575fc; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; margin-right: 8px;">Details</button>`;
+        
+        let deleteButton = '';
+        if (idsArray.length > 0) {
+            deleteButton = `<button onclick="deleteTransaction([${idsArray.join(',')}])" style="padding: 6px 10px; font-size: 12px; margin: 2px; background: #ff6b6b; color: white; border: none; border-radius: 4px; cursor: pointer;">Delete</button>`;
+        }
+        
+        row.innerHTML = `
+            <td style="padding: 15px;">${dateStr}</td>
+            <td style="padding: 15px;"><strong>${escapeHtml(itemsText)}</strong></td>
+            <td style="padding: 15px; text-align: center;">${transaction.items.reduce((sum, item) => sum + (item.quantity || 0), 0)}</td>
+            <td style="padding: 15px; text-align: right;">RWF ${transaction.items.length > 0 ? (transaction.items[0].price || 0).toLocaleString() : '0'}</td>
+            <td style="padding: 15px; text-align: right; font-weight: 600; color: #2575fc;">RWF ${transaction.totalAmount.toLocaleString()}</td>
+            <td style="padding: 15px; text-align: center;">${saleTypeDisplay}</td>
+            <td style="padding: 15px; text-align: center;">${escapeHtml(customerName)}</td>
+            <td style="padding: 15px; text-align: center;">
+                ${detailsButton}
+                ${deleteButton}
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function filterSalesHistory(searchTerm) {
+    applySalesHistoryFilters();
+    return;
+    const tbody = document.getElementById('salesHistoryBody');
+    if (!tbody) return;
+    
+    clearElement(tbody);
+    
+    if (!searchTerm || searchTerm.trim() === '') {
+        displaySalesHistory();
+        return;
+    }
+    
+    const search = searchTerm.toLowerCase();
+    const filtered = sales.filter(sale => {
+        const customerName = sale.customerId !== null && customers[sale.customerId] ? customers[sale.customerId].name : 'Guest';
+        return (sale.drinkName && sale.drinkName.toLowerCase().includes(search)) ||
+               (customerName && customerName.toLowerCase().includes(search)) ||
+               (sale.date && new Date(sale.date).toLocaleDateString().toLowerCase().includes(search));
+    });
+    
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="padding: 40px; text-align: center; color: #999;">No sales found</td></tr>';
+        return;
+    }
+    
+    // Group filtered results
+    const transactions = {};
+    filtered.forEach((sale) => {
+        const saleDate = new Date(sale.date);
+        const timeKey = `${saleDate.toISOString().slice(0, 16)}|${sale.customerId || 'guest'}|${sale.type}`;
+        
+        if (!transactions[timeKey]) {
+            transactions[timeKey] = {
+                date: sale.date,
+                customerId: sale.customerId,
+                type: sale.type,
+                items: [],
+                totalAmount: 0,
+                ids: []
+            };
+        }
+        transactions[timeKey].items.push(sale);
+        transactions[timeKey].totalAmount += (sale.total || 0);
+        if (sale.id) {
+            transactions[timeKey].ids.push(sale.id);
+        }
+    });
+    
+    // Display
+    Object.values(transactions).sort((a, b) => new Date(b.date) - new Date(a.date)).forEach((transaction) => {
+        const saleDate = new Date(transaction.date);
+        const dateStr = saleDate.toLocaleDateString() + ' ' + saleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const customerName = transaction.customerId !== null && customers[transaction.customerId] ? 
+            customers[transaction.customerId].name : 'Guest';
+        const saleTypeDisplay = transaction.type === 'credit' ? 
+            '<span style="background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px;">Credit</span>' : 
+            '<span style="background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px;">Cash</span>';
+        
+        const itemsText = transaction.items.length > 1 ? 
+            `${transaction.items.length} items` : 
+            (transaction.items[0]?.drinkName || 'Unknown');
+        
+        const row = document.createElement('tr');
+        row.style.borderBottom = '1px solid #e1e5e9';
+        
+        const idsArray = transaction.ids.length > 0 ? transaction.ids : 
+            transaction.items.map(i => i.id).filter(id => id);
+        
+        const detailsButton = `<button onclick="showTransactionDetails('${JSON.stringify(transaction.items).replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" style="padding: 6px 12px; background: #2575fc; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; margin-right: 8px;">Details</button>`;
+        
+        let deleteButton = '';
+        if (idsArray.length > 0) {
+            deleteButton = `<button onclick="deleteTransaction([${idsArray.join(',')}])" style="padding: 6px 10px; font-size: 12px; margin: 2px; background: #ff6b6b; color: white; border: none; border-radius: 4px; cursor: pointer;">Delete</button>`;
+        }
+        
+        row.innerHTML = `
+            <td style="padding: 15px;">${dateStr}</td>
+            <td style="padding: 15px;"><strong>${escapeHtml(itemsText)}</strong></td>
+            <td style="padding: 15px; text-align: center;">${transaction.items.reduce((sum, item) => sum + (item.quantity || 0), 0)}</td>
+            <td style="padding: 15px; text-align: right;">RWF ${transaction.items.length > 0 ? (transaction.items[0].price || 0).toLocaleString() : '0'}</td>
+            <td style="padding: 15px; text-align: right; font-weight: 600; color: #2575fc;">RWF ${transaction.totalAmount.toLocaleString()}</td>
+            <td style="padding: 15px; text-align: center;">${saleTypeDisplay}</td>
+            <td style="padding: 15px; text-align: center;">${escapeHtml(customerName)}</td>
+            <td style="padding: 15px; text-align: center;">
+                ${detailsButton}
+                ${deleteButton}
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+async function deleteSale(index) {
+    if (index < 0 || index >= sales.length) return;
+    
+    if (confirm('Are you sure you want to delete this sale? This action cannot be undone.')) {
+        const deletedSale = sales[index];
+        
+        // If it was a credit sale, reduce customer's debt
+        if (deletedSale.type === 'credit' && deletedSale.customerId !== null && customers[deletedSale.customerId]) {
+            customers[deletedSale.customerId].owing = Math.max(0, (customers[deletedSale.customerId].owing || 0) - (deletedSale.total || 0));
+        }
+        
+        sales.splice(index, 1);
+        await optimizedSaveData();
+        displaySalesHistory();
+        updateHome();
+        
+        showSuccessToast('Sale deleted successfully.');
+    }
+}
+
+// ================= SALES HISTORY PDF EXPORT - WITH SPECIAL CHARACTER FIX =================
+function exportSalesHistoryPDF() {
+    try {
+        const filteredSales = getSalesHistoryFilteredSales();
+        if (!filteredSales || filteredSales.length === 0) {
+            alert("No sales to export");
+            return;
+        }
+
+        const doc = createPDFDocument({ orientation: "portrait", unit: "mm", format: "a4" });
+        const reportTitle = 'Sales History Report';
+
+        const margin = 15;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const contentWidth = pageWidth - (margin * 2);
+        let y = applyPdfBrandHeader(doc, reportTitle);
+
+        function safe(value, max = 30) {
+            if (!value) return "";
+            return String(value).substring(0, max);
+        }
+
+        // Group transactions by date, customer, and type
+        const transactions = {};
+        let grandTotal = 0;
+
+        filteredSales.forEach(sale => {
+            const d = new Date(sale.date);
+            const key = d.toISOString().slice(0,16) + "|" + (sale.customerId || "guest") + "|" + sale.type;
+
+            if (!transactions[key]) {
+                transactions[key] = {
+                    date: sale.date,
+                    type: sale.type,
+                    customerId: sale.customerId,
+                    items: [],
+                    total: 0
+                };
+            }
+
+            transactions[key].items.push(sale);
+            transactions[key].total += sale.total || 0;
+            grandTotal += sale.total || 0;
+        });
+
+        const transactionList = Object.values(transactions)
+            .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+        // ================= GRAND TOTAL =================
+        doc.setFillColor(240, 247, 255);
+        doc.setDrawColor(37, 117, 252);
+        doc.setLineWidth(0.5);
+        doc.rect(margin, y, contentWidth, 15, "FD");
+
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(37, 117, 252);
+        doc.text("TOTAL SALES:", margin + 10, y + 10);
+        
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 0);
+        doc.text("RWF " + grandTotal.toLocaleString(), margin + contentWidth - 10, y + 10, { align: "right" });
+
+        y += 25;
+
+        // ================= GENERATION INFO =================
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text("Generated on: " + new Date().toLocaleString(), margin, y);
+        y += 10;
+
+        // ================= TABLE HEADER =================
+        function drawTableHeader() {
+            doc.setFillColor(37, 117, 252);
+            doc.rect(margin, y, contentWidth, 8, "F");
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9);
+            doc.setTextColor(255, 255, 255);
+
+            doc.text("Date & Time", margin + 3, y + 5);
+            doc.text("Type", margin + 45, y + 5);
+            doc.text("Customer", margin + 70, y + 5);
+            doc.text("Total (RWF)", margin + 150, y + 5);
+
+            y += 10;
+            doc.setTextColor(0, 0, 0);
+            doc.setFont("helvetica", "normal");
+        }
+
+        drawTableHeader();
+
+        // ================= TRANSACTIONS =================
+        transactionList.forEach((transaction, index) => {
+            // Check if we need a new page
+            if (y + 30 > pageHeight - 20) {
+                doc.addPage();
+                y = 30;
+                drawTableHeader();
+            }
+
+            // Light background for alternating rows
+            if (index % 2 === 0) {
+                doc.setFillColor(250, 250, 250);
+                doc.rect(margin, y - 2, contentWidth, 10, "F");
+            }
+
+            // Transaction main row
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "bold");
+            
+            const dateStr = new Date(transaction.date).toLocaleDateString() + ' ' + 
+                           new Date(transaction.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            const type = transaction.type === "credit" ? "Credit" : "Cash";
+            
+            // Get customer name safely
+            let customerName = "Guest";
+            if (transaction.customerId && typeof getSafeCustomerName === "function") {
+                customerName = getSafeCustomerName(transaction.customerId) || "Guest";
+            }
+            customerName = safe(customerName, 20);
+
+            doc.text(dateStr, margin + 3, y + 3);
+            
+            // Type with color
+            if (transaction.type === "credit") {
+                doc.setTextColor(200, 0, 0);
+            } else {
+                doc.setTextColor(0, 150, 0);
+            }
+            doc.text(type, margin + 45, y + 3);
+            
+            doc.setTextColor(0, 0, 0);
+            doc.text(customerName, margin + 70, y + 3);
+            
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(37, 117, 252);
+            doc.text("RWF " + transaction.total.toLocaleString(), margin + 150, y + 3);
+            
+            y += 8;
+
+            // Items
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
+            doc.setTextColor(80, 80, 80);
+
+            transaction.items.forEach(item => {
+                if (y + 5 > pageHeight - 20) {
+                    doc.addPage();
+                    y = 30;
+                }
+
+                const itemText = "- " + safe(item.drinkName, 25) + 
+                                " (Qty: " + (item.quantity || 0) + 
+                                " x RWF " + (item.price || 0).toLocaleString() + 
+                                " = RWF " + (item.total || 0).toLocaleString() + ")";
+
+                doc.text(itemText, margin + 15, y + 3);
+                y += 5;
+            });
+
+            y += 3; // Space between transactions
+        });
+
+        // Save the PDF
+        const filename = "sales-history-" + new Date().toISOString().split("T")[0] + ".pdf";
+        applyPdfBrandFooter(doc, reportTitle);
+        doc.save(filename);
+        
+        showSuccessToast('Sales history PDF exported successfully.');
+        
+    } catch (error) {
+        console.error('Sales history PDF export error:', error);
+        alert('Error exporting PDF: ' + error.message);
+    }
+}
+
+// ========== HELPER FUNCTIONS FOR SPECIAL CHARACTERS ==========
+
+/**
+ * Safely encodes text to prevent special character corruption
+ */
+function safeText(text, maxLength = 30) {
+    if (!text) return '';
+    
+    // Convert to string and remove/replace problematic characters
+    let safe = String(text)
+        .replace(/[^\x20-\x7E]/g, '') // Remove non-ASCII characters
+        .replace(/[Ã˜Ã¸]/g, 'O')         // Replace Ã˜ with O
+        .replace(/[ÃœÃ¼]/g, 'U')         // Replace Ãœ with U
+        .replace(/[Ã‰Ã©ÃŠÃªÃˆÃ¨]/g, 'E')     // Replace accented E with E
+        .replace(/[ÃÃ¡Ã‚Ã¢Ã€Ã ]/g, 'A')     // Replace accented A with A
+        .replace(/[ÃÃ­ÃŽÃ®ÃŒÃ¬]/g, 'I')     // Replace accented I with I
+        .replace(/[Ã“Ã³Ã”Ã´Ã’Ã²]/g, 'O')     // Replace accented O with O
+        .replace(/[ÃšÃºÃ›Ã»Ã™Ã¹]/g, 'U')     // Replace accented U with U
+        .replace(/[Ã‡Ã§]/g, 'C')         // Replace Ã‡ with C
+        .replace(/[Ã‘Ã±]/g, 'N')         // Replace Ã‘ with N
+        .replace(/[ÃŸ]/g, 'ss')         // Replace ÃŸ with ss
+        .trim();
+    
+    // Truncate if too long
+    if (safe.length > maxLength) {
+        safe = safe.substring(0, maxLength - 3) + '...';
+    }
+    
+    return safe || '-';
+}
+
+/**
+ * Safely get customer name with fallback
+ */
+function getSafeCustomerName(customerId) {
+    if (customerId === null || customerId === undefined) return 'Guest';
+    if (!customers[customerId]) return 'Unknown';
+    
+    const name = customers[customerId].name;
+    return safeText(name, 15);
+}
+
+/**
+ * Alternative export function if special characters persist
+ */
+function exportSalesHistorySimplePDF() {
+    // Your existing simple PDF function here
+    // This serves as fallback
+}
+// ================= SETTINGS FUNCTIONS =================
+async function refreshStorageStatus() {
+    const statusEl = document.getElementById('storageStatus');
+    if (!statusEl) return;
+
+    try {
+        if (window.electronAPI && typeof window.electronAPI.invoke === 'function') {
+            const result = await window.electronAPI.invoke('get-storage-status');
+            if (result && result.success) {
+                statusEl.textContent = result.mode === 'sqlite' ? 'SQLite Database' : 'JSON Files';
+                return;
+            }
+        }
+
+        statusEl.textContent = window.indexedDB ? 'IndexedDB + localStorage' : 'localStorage';
+    } catch (error) {
+        statusEl.textContent = 'Unknown';
+    }
+}
+
+function renderDrinkProfitEditor() {
+    const container = document.getElementById('drinkProfitList');
+    if (!container) return;
+
+    clearElement(container);
+    normalizeDrinksData();
+
+    if (drinks.length === 0) {
+        container.innerHTML = `<div class="drink-profit-empty">${t('noDrinksForProfitEditor')}</div>`;
+        return;
+    }
+
+    drinks.forEach((drink, index) => {
+        const row = document.createElement('div');
+        row.className = 'drink-profit-row';
+        row.innerHTML = `
+            <div class="drink-profit-name">${escapeHtml(drink.name)}</div>
+            <input class="drink-profit-input" type="number" min="0" step="1" data-drink-index="${index}" value="${Number(getDrinkProfitPerCaseByName(drink.name)).toString()}">
+        `;
+        container.appendChild(row);
+    });
+}
+
+async function saveDrinkProfitsFromSettings() {
+    const inputs = document.querySelectorAll('#drinkProfitList .drink-profit-input');
+    if (!inputs.length) {
+        alert(t('noDrinksForProfitEditor'));
+        return;
+    }
+
+    for (const input of inputs) {
+        const index = Number(input.dataset.drinkIndex);
+        const value = Number(input.value);
+        if (!Number.isFinite(value) || value < 0 || !drinks[index]) {
+            alert(t('profitPerCaseError'));
+            return;
+        }
+        drinks[index].profitPerCase = value;
+    }
+
+    await optimizedSaveData();
+    updateDrinkList();
+    updateQuickDrinkSelect();
+    updateHome();
+    renderDrinkProfitEditor();
+    showSuccessToast(t('drinkProfitSaved'));
+}
+
+function loadSettings() {
+    // Load profit percentage
+    const profitPercentage = settings.profitPercentage || 30;
+    const profitInput = document.getElementById('profitPercentage');
+    if (profitInput) profitInput.value = profitPercentage;
+    const profitModeInput = document.getElementById('profitMode');
+    if (profitModeInput) profitModeInput.value = settings.profitMode || 'percentage';
+    const addDrinkProfitInput = document.getElementById('newDrinkProfitPerCase');
+    if (addDrinkProfitInput && !addDrinkProfitInput.value) {
+        addDrinkProfitInput.value = Number(getDefaultDrinkProfitPerCase());
+    }
+    
+    // Load theme and language
+    const currentTheme = settings.theme || 'light';
+    const language = settings.language || 'en';
+    const langSelect = document.getElementById('language');
+    if (langSelect) {
+        langSelect.value = language;
+        if (!langSelect.dataset.boundLanguageChange) {
+            langSelect.addEventListener('change', onLanguageChange);
+            langSelect.dataset.boundLanguageChange = '1';
+        }
+    }
+    
+    const currencySelect = document.getElementById('currency');
+    if (currencySelect) currencySelect.value = settings.currency || 'RWF';
+    
+    setAppLanguage(language);
+    applyTheme(currentTheme);
+    refreshStorageStatus();
+    renderDrinkProfitEditor();
+}
+
+function saveProfitPercentage() {
+    const profit = parseFloat(document.getElementById('profitPercentage').value) || 30;
+    const profitModeInput = document.getElementById('profitMode');
+    const profitMode = profitModeInput ? profitModeInput.value : 'percentage';
+    
+    if (profit < 0 || profit > 100) {
+        alert(t('profitPercentRangeError'));
+        return;
+    }
+    
+    settings.profitPercentage = profit;
+    settings.profitMode = profitMode;
+    optimizedSaveData();
+    updateHome();
+    renderDrinkProfitEditor();
+    const modeSummary = profitMode === 'perCase'
+        ? t('profitLabelPerDrinkCase')
+        : t('profitLabelPercentage').replace('{value}', profit);
+    showSuccessToast(`${t('profitSaved')}: ${modeSummary}`);
+}
+
+function setTheme(theme) {
+    settings.theme = theme;
+    optimizedSaveData();
+    applyTheme(theme);
+}
+
+function applyTheme(theme) {
+    const lightBtn = document.getElementById('lightThemeBtn');
+    const darkBtn = document.getElementById('darkThemeBtn');
+    
+    if (theme === 'dark') {
+        document.body.classList.add('dark-mode');
+        if (darkBtn) darkBtn.style.borderColor = '#2575fc';
+        if (lightBtn) lightBtn.style.borderColor = '#333';
+    } else {
+        document.body.classList.remove('dark-mode');
+        if (lightBtn) lightBtn.style.borderColor = '#2575fc';
+        if (darkBtn) darkBtn.style.borderColor = '#333';
+    }
+}
+
+function setAppLanguage(languageCode) {
+    const normalizedLanguage = translations[languageCode] ? languageCode : 'en';
+    settings.language = normalizedLanguage;
+    currentLanguage = normalizedLanguage;
+    document.documentElement.lang = normalizedLanguage;
+    updateLanguageUI();
+}
+
+function onLanguageChange(event) {
+    const selectedLanguage = event && event.target ? event.target.value : 'en';
+    setAppLanguage(selectedLanguage);
+    optimizedSaveData();
+}
+
+function saveCurrencyAndLanguage() {
+    const languageSelect = document.getElementById('language');
+    const currencySelect = document.getElementById('currency');
+    
+    const language = languageSelect ? languageSelect.value : 'en';
+    const currency = currencySelect ? currencySelect.value : 'RWF';
+    
+    settings.currency = currency;
+    setAppLanguage(language);
+    optimizedSaveData();
+    showSuccessToast('Settings saved. Language and currency updated.');
+}
+
+// Translation helper function
+function t(key) {
+    if (translations[currentLanguage] && translations[currentLanguage][key]) {
+        return translations[currentLanguage][key];
+    }
+    return translations['en'][key] || key;
+}
+
+// Update entire UI when language changes
+function updateLanguageUI() {
+    const setText = (selector, value) => {
+        const el = document.querySelector(selector);
+        if (el) el.textContent = value;
+    };
+
+    const setPlaceholder = (selector, value) => {
+        const el = document.querySelector(selector);
+        if (el) el.placeholder = value;
+    };
+
+    // Navigation
+    const navKeyByPage = {
+        home: 'home',
+        addSale: 'addSale',
+        customers: 'customers',
+        clate: 'clate',
+        salesHistory: 'salesHistory',
+        reports: 'reports',
+        settings: 'settings'
+    };
+    document.querySelectorAll('.nav-btn[data-page]').forEach(btn => {
+        const key = navKeyByPage[btn.dataset.page];
+        if (!key) return;
+        const label = btn.querySelector('.nav-label');
+        if (label) {
+            label.textContent = t(key);
+        } else {
+            btn.textContent = t(key);
+        }
+    });
+    const topSettingsBtn = document.getElementById('topSettingsBtn');
+    if (topSettingsBtn) {
+        topSettingsBtn.title = t('settings');
+        topSettingsBtn.setAttribute('aria-label', t('settings'));
+    }
+
+    // Page headers
+    setText('#addSale .page-header h2', t('addSale'));
+    setText('#customers .page-header h2', t('customers'));
+    setText('#clate .page-header h2', t('clate'));
+    setText('#salesHistory .page-header h2', t('salesHistory'));
+    setText('#reports .page-header h2', t('reports'));
+    setText('#settings .page-header h2', t('settingsPreferences'));
+
+    // Login / signup UI
+    setText('#authLoginTab', t('login'));
+    setText('#authSignupTab', t('signUp'));
+    setText('#loginScreen label[for="signupName"]', t('fullName'));
+    setText('#loginScreen label[for="signupEmail"]', t('emailAddress'));
+    setText('#loginScreen label[for="phone"]', t('phoneOrEmail'));
+    setText('#loginScreen label[for="pin"]', t('pinLabel'));
+    setText('#loginScreen label[for="confirmPin"]', t('confirmPin'));
+    setText('#loginScreen label[for="signupVerificationCode"]', t('verificationCode'));
+    setText('#sendSignupCodeBtn', t('sendCode'));
+    setText('#loginBtn', t('login'));
+    setText('#signupBtn', t('createAccount'));
+    setText('#forgotPinBtn', t('forgotPin'));
+    setText('#forgotPinTitle', t('resetPin'));
+    setText('#loginScreen label[for="resetPhone"]', t('phoneNumber'));
+    setText('#loginScreen label[for="resetEmail"]', t('emailAddress'));
+    setText('#loginScreen label[for="resetCode"]', t('verificationCode'));
+    setText('#loginScreen label[for="resetNewPin"]', t('resetNewPin'));
+    setText('#loginScreen label[for="resetConfirmPin"]', t('resetConfirmPin'));
+    setText('#sendResetCodeBtn', t('sendCode'));
+    setText('#resetPinBtn', t('resetPin'));
+    setText('#cancelResetPinBtn', t('cancel'));
+    setPlaceholder('#signupName', t('fullName'));
+    setPlaceholder('#signupEmail', t('emailAddress'));
+    setPlaceholder('#phone', t('phoneOrEmail'));
+    setPlaceholder('#pin', t('pinLabel'));
+    setPlaceholder('#confirmPin', t('confirmPin'));
+    setPlaceholder('#signupVerificationCode', t('verificationCode'));
+    setPlaceholder('#resetPhone', t('phoneNumber'));
+    setPlaceholder('#resetEmail', t('emailAddress'));
+    setPlaceholder('#resetCode', t('verificationCode'));
+    setPlaceholder('#resetNewPin', t('resetNewPin'));
+    setPlaceholder('#resetConfirmPin', t('resetConfirmPin'));
+    setAuthHintText();
+    setText('#onboardingSkipBtn', t('tutorialSkipAll'));
+    setText('#onboardingPrevBtn', t('tutorialBack'));
+    setText('#onboardingNextBtn', t('tutorialNext'));
+    updateActiveUserBadge();
+
+    // Home dashboard
+    setText('#home .dashboard-card h3', t('todaySales'));
+    setText('#home .dashboard-card p', t('dailyTotal'));
+    const homeStatLabels = document.querySelectorAll('#home .stat-card h4');
+    if (homeStatLabels[0]) homeStatLabels[0].textContent = t('todayProfit');
+    if (homeStatLabels[1]) homeStatLabels[1].textContent = t('customersOwing');
+    if (homeStatLabels[2]) homeStatLabels[2].textContent = t('pendingDeposits');
+
+    // Add Sale page
+    const saleLeftTitles = document.querySelectorAll('#addSale .sale-left h3');
+    if (saleLeftTitles[0]) saleLeftTitles[0].textContent = t('availableDrinks');
+    if (saleLeftTitles[1]) saleLeftTitles[1].textContent = t('addNewDrink');
+    setPlaceholder('#drinkSearch', t('searchDrinks'));
+    setPlaceholder('#newDrinkName', t('drinkName'));
+    setPlaceholder('#newDrinkPrice', t('drinkPricePlaceholder'));
+    setPlaceholder('#newDrinkProfitPerCase', t('newDrinkProfitPerCase'));
+    setText('#addSale button[onclick="saveNewDrink()"]', t('saveDrink'));
+    setText('#addSale .sale-right > h3', t('currentSale'));
+    setText('#addSale .sale-right > div:nth-of-type(1) h4', t('cartItems'));
+    setText('#addSale .sale-right > div:nth-of-type(2) h4', t('quickAdd'));
+    const quickLabels = document.querySelectorAll('#addSale .sale-right > div:nth-of-type(2) label');
+    if (quickLabels[0]) quickLabels[0].textContent = `${t('selectDrink')}:`;
+    if (quickLabels[1]) quickLabels[1].textContent = `${t('quantity')}:`;
+    setPlaceholder('#quickQuantity', t('enterQuantity'));
+    setText('#addSale button[onclick="addToCart()"]', t('addToCart'));
+    setText('#addSale .sale-type label', `${t('saleType')}:`);
+    setText('#addSale #customerSelectContainer label', `${t('selectCustomer')}:`);
+    setText('#addSale .total-display p', t('totalAmount'));
+    setText('#addSale .confirm-btn', t('confirmSale'));
+    setText('#addSale button[onclick="clearCart()"]', t('clearCart'));
+    const saleTypeNormal = document.querySelector('#saleType option[value="normal"]');
+    const saleTypeCredit = document.querySelector('#saleType option[value="credit"]');
+    if (saleTypeNormal) saleTypeNormal.textContent = t('normalSale');
+    if (saleTypeCredit) saleTypeCredit.textContent = t('creditSale');
+
+    // Customers page
+    setText('#customers button[onclick="openCustomerForm()"]', `+ ${t('addCustomer')}`);
+    setText('#customers button[onclick="exportDebtSummaryPDF()"]', t('exportDebtSummary'));
+    setPlaceholder('#customers .customer-controls .search-input', t('searchCustomers'));
+    const customerFilterBtns = document.querySelectorAll('#customers .filter-buttons .filter-btn');
+    if (customerFilterBtns[0]) customerFilterBtns[0].textContent = t('all');
+    if (customerFilterBtns[1]) customerFilterBtns[1].textContent = t('owing');
+    if (customerFilterBtns[2]) customerFilterBtns[2].textContent = t('cleared');
+
+    // Clate/Deposit page
+    setText('#clate button[onclick="openDepositForm()"]', `+ ${t('addDeposit')}`);
+    setText('#clate .page-description', t('trackDeposits'));
+    setPlaceholder('#depositSearch', t('searchDeposits'));
+    const depositFilterBtns = document.querySelectorAll('#clate .filter-buttons .filter-btn');
+    if (depositFilterBtns[0]) depositFilterBtns[0].textContent = t('all');
+    if (depositFilterBtns[1]) depositFilterBtns[1].textContent = t('pending');
+    if (depositFilterBtns[2]) depositFilterBtns[2].textContent = t('returned');
+
+    // Sales history page
+    setText('#salesHistory button[onclick="exportSalesHistoryPDF()"]', t('exportPdf'));
+    setPlaceholder('#salesSearch', t('searchSales'));
+    const saleTypeFilterBtns = document.querySelectorAll('#salesHistory .filter-buttons .filter-btn');
+    if (saleTypeFilterBtns[0]) saleTypeFilterBtns[0].textContent = t('all');
+    if (saleTypeFilterBtns[1]) saleTypeFilterBtns[1].textContent = t('cash');
+    if (saleTypeFilterBtns[2]) saleTypeFilterBtns[2].textContent = t('creditSale');
+    const historyHeaders = document.querySelectorAll('#salesHistoryTable thead th');
+    if (historyHeaders[0]) historyHeaders[0].textContent = t('dateTime');
+    if (historyHeaders[1]) historyHeaders[1].textContent = t('items');
+    if (historyHeaders[2]) historyHeaders[2].textContent = t('quantity');
+    if (historyHeaders[3]) historyHeaders[3].textContent = t('unitPrice');
+    if (historyHeaders[4]) historyHeaders[4].textContent = t('total');
+    if (historyHeaders[5]) historyHeaders[5].textContent = t('type');
+    if (historyHeaders[6]) historyHeaders[6].textContent = t('customers');
+    if (historyHeaders[7]) historyHeaders[7].textContent = t('actions');
+    const noSalesCell = document.querySelector('#salesHistoryBody td[colspan="8"]');
+    if (noSalesCell) noSalesCell.textContent = t('noSalesYet');
+
+    // Reports page
+    const reportBtns = document.querySelectorAll('#reports .report-controls .report-btn');
+    if (reportBtns[0]) reportBtns[0].textContent = t('daily');
+    if (reportBtns[1]) reportBtns[1].textContent = t('weekly');
+    if (reportBtns[2]) reportBtns[2].textContent = t('monthly');
+    if (reportBtns[3]) reportBtns[3].textContent = t('annual');
+    if (reportBtns[4]) reportBtns[4].textContent = t('fullReport');
+    setText('#reports .reports-help', t('reportsHelp'));
+    setText('#reports .range-panel-title', t('customRangeReport'));
+    setText('#reports label[for="rangeStartDate"]', t('startDate'));
+    setText('#reports label[for="rangeEndDate"]', t('endDate'));
+    setText('#reports label[for="rangeMonth"]', t('fullMonth'));
+    setText('#reports button[onclick="setRangeToThisMonth()"]', t('thisMonth'));
+    setText('#reports button[onclick="setRangeToSelectedMonth()"]', t('useSelectedMonth'));
+    setText('#reports button[onclick="showCustomRangeReport()"]', t('loadRangeReport'));
+    setText('#reports button[onclick="exportCustomRangePDF()"]', t('exportRangePdf'));
+    setText('#reports .range-note', t('rangeNote'));
+
+    // Settings page
+    setText('#settingsBusinessTitle', t('businessSettings'));
+    setText('#settingsInterfaceTitle', t('interfaceSettings'));
+    setText('#settingsDataTitle', t('dataManagement'));
+    setText('#settingsSystemTitle', t('appInformation'));
+    setText('#settings label[for="profitPercentage"]', t('profitPercentage'));
+    setText('#settings label[for="profitMode"]', t('profitModeLabel'));
+    const profitModePercentageOption = document.querySelector('#profitMode option[value="percentage"]');
+    const profitModePerCaseOption = document.querySelector('#profitMode option[value="perCase"]');
+    if (profitModePercentageOption) profitModePercentageOption.textContent = t('profitModePercentage');
+    if (profitModePerCaseOption) profitModePerCaseOption.textContent = t('profitModePerCase');
+    setText('#settings button[onclick="saveProfitPercentage()"]', t('save'));
+    setText('#profitInfoText', t('profitInfo'));
+    setText('#drinkProfitManagerTitle', t('drinkProfitManagerTitle'));
+    setText('#saveDrinkProfitBtn', t('saveDrinkProfits'));
+    setText('#drinkProfitInfoText', t('drinkProfitInfo'));
+    setText('#settings label[for="themeMode"]', t('themeMode'));
+    setText('#lightThemeBtn', t('lightMode'));
+    setText('#darkThemeBtn', t('darkMode'));
+    setText('#settings label[for="language"]', t('selectLanguage'));
+    setText('#languageInfoText', t('languageInfo'));
+    setText('#settings label[for="currency"]', t('currencySymbol'));
+    setText('#currencyInfoText', t('currencyInfo'));
+    setText('#saveLanguageCurrencyBtn', t('saveLanguageCurrency'));
+    setText('#startTutorialBtn', t('runTutorial'));
+    setText('#settings button[onclick="clearAllData()"]', t('clearAllData'));
+    setText('#clearWarningText', t('warningClearData'));
+
+    // App info and footer
+    const appNameRow = document.getElementById('appNameRow');
+    if (appNameRow) appNameRow.innerHTML = `<strong>${t('appName')}</strong> Make A Way`;
+    const versionRow = document.getElementById('versionRow');
+    if (versionRow) versionRow.innerHTML = `<strong>${t('version')}</strong> 2.0`;
+    const purposeRow = document.getElementById('purposeRow');
+    if (purposeRow) purposeRow.innerHTML = `<strong>${t('purpose')}</strong> ${t('appPurposeValue')}`;
+    const storageRow = document.getElementById('storageRow');
+    if (storageRow) storageRow.innerHTML = `<strong>${t('storageLabel')}</strong> <span id="storageStatus">${document.getElementById('storageStatus')?.textContent || 'Checking...'}</span>`;
+    const accountRow = document.getElementById('accountRow');
+    if (accountRow) accountRow.innerHTML = `<strong>${t('activeAccountLabel')}</strong> <span id="activeAccountName">${activeUser ? (activeUser.name || activeUser.phone) : t('notLoggedIn')}</span>`;
+    const footerText = document.querySelector('.footer p');
+    if (footerText) footerText.textContent = `${t('footerText')} © 2026`;
+
+    // Keep dynamic parts in sync
+    refreshStorageStatus();
+    updateActiveUserBadge();
+    if (onboardingVisible) renderOnboardingStep();
+    updateQuickDrinkSelect();
+    updateCartDisplay();
+    renderDrinkProfitEditor();
+}
+
+async function clearAllData() {
+    if (!activeUser) {
+        alert('Please login first.');
+        return;
+    }
+    const confirmation = prompt('WARNING: This clears only the current user data.\nType "CLEAR USER DATA" to proceed:');
+    if (confirmation === 'CLEAR USER DATA') {
+        sales = [];
+        customers = [];
+        clates = [];
+        drinks = [];
+        settings = getDefaultUserSettings();
+        cart = [];
+        
+        await optimizedSaveData();
+        updateHome();
+        updateDrinkList();
+        updateQuickDrinkSelect();
+        updateCustomerDropdown();
+        updateCartDisplay();
+        showPage('home');
+        showSuccessToast('Current user data cleared.');
+    } else {
+        alert('Data clear cancelled.');
+    }
+}
+
+// Make functions available globally
+window.selectDrink = selectDrink;
+window.deleteDrink = deleteDrink;
+window.addToCart = addToCart;
+window.updateCartItemQty = updateCartItemQty;
+window.removeFromCart = removeFromCart;
+window.clearCart = clearCart;
+window.confirmSale = confirmSale;
+window.changeQty = changeQty;
+window.changeSaleType = changeSaleType;
+window.saveNewDrink = saveNewDrink;
+window.openCustomerForm = openCustomerForm;
+window.closeCustomerForm = closeCustomerForm;
+window.openDepositForm = openDepositForm;
+window.closeDepositForm = closeDepositForm;
+window.openAddDebtForm = openAddDebtForm;
+window.openReduceDebtForm = openReduceDebtForm;
+window.openClearDebtForm = openClearDebtForm;
+window.closeDebtForm = closeDebtForm;
+window.saveCustomer = saveCustomer;
+window.saveDeposit = saveDeposit;
+window.confirmDebt = confirmDebt;
+window.deleteCustomer = deleteCustomer;
+window.filterCustomers = filterCustomers;
+window.returnKosiyo = returnKosiyo;
+window.deleteKosiyo = deleteKosiyo;
+window.filterDeposits = filterDeposits;
+window.showDailyReport = showDailyReport;
+window.setDailyReportToday = setDailyReportToday;
+window.printCurrentReport = printCurrentReport;
+window.setRangeToThisMonth = setRangeToThisMonth;
+window.setRangeToSelectedMonth = setRangeToSelectedMonth;
+window.showCustomRangeReport = showCustomRangeReport;
+window.exportCustomRangePDF = exportCustomRangePDF;
+window.showWeeklyReport = showWeeklyReport;
+window.showMonthlyReport = showMonthlyReport;
+window.showAnnualReport = showAnnualReport;
+window.showFullReport = showFullReport;
+window.exportReportToPDF = exportReportToPDF;
+window.exportDebtSummaryPDF = exportDebtSummaryPDF;
+window.exportCustomerDebtPDF = exportCustomerDebtPDF;
+window.displaySalesHistory = displaySalesHistory;
+window.applySalesHistoryFilters = applySalesHistoryFilters;
+window.goToTodaySalesHistory = goToTodaySalesHistory;
+window.filterSalesByType = filterSalesByType;
+window.deleteTransaction = deleteTransaction;
+window.showTransactionDetails = showTransactionDetails;
+window.deleteSale = deleteSale;
+window.exportSalesHistoryPDF = exportSalesHistoryPDF;
+window.loadSettings = loadSettings;
+window.saveProfitPercentage = saveProfitPercentage;
+window.saveDrinkProfitsFromSettings = saveDrinkProfitsFromSettings;
+window.setTheme = setTheme;
+window.saveCurrencyAndLanguage = saveCurrencyAndLanguage;
+window.startOnboardingTutorial = startOnboardingTutorial;
+window.clearAllData = clearAllData;
+window.showPage = showPage;
+window.filterDrinks = filterDrinks;
+window.updateLanguageUI = updateLanguageUI;
+
+
+
+
+
+
