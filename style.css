@@ -69,6 +69,8 @@ body {
     position: absolute;
     inset: 0;
     background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(7px);
+    -webkit-backdrop-filter: blur(7px);
 }
 .modal-content {
     position: relative;
@@ -135,40 +137,90 @@ body {
 .onboarding-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(9, 18, 32, 0.72);
+    background:
+        radial-gradient(circle at 12% 16%, rgba(67, 181, 255, 0.24) 0%, rgba(67, 181, 255, 0) 42%),
+        radial-gradient(circle at 85% 12%, rgba(44, 135, 255, 0.2) 0%, rgba(44, 135, 255, 0) 42%),
+        rgba(6, 16, 34, 0.78);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     z-index: 12000;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 24px;
 }
 
 .onboarding-card {
-    width: min(520px, 100%);
-    background: #fff;
-    border-radius: 14px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-    padding: 22px;
+    position: relative;
+    width: min(560px, 100%);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 248, 255, 0.94) 100%);
+    border-radius: 18px;
+    border: 1px solid rgba(99, 156, 250, 0.25);
+    box-shadow: 0 24px 64px rgba(12, 22, 38, 0.38);
+    padding: 24px;
+    overflow: hidden;
+}
+
+.onboarding-glow {
+    position: absolute;
+    width: 190px;
+    height: 190px;
+    border-radius: 999px;
+    right: -58px;
+    top: -78px;
+    background: radial-gradient(circle, rgba(59, 144, 255, 0.3) 0%, rgba(59, 144, 255, 0) 72%);
+    pointer-events: none;
 }
 
 .onboarding-step {
-    color: #2e6fd6;
+    position: relative;
+    z-index: 1;
+    color: #2567d6;
     font-size: 13px;
     font-weight: 700;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+}
+
+.onboarding-progress {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(66, 126, 218, 0.18);
+    overflow: hidden;
+    margin-bottom: 14px;
+}
+
+.onboarding-progress span {
+    display: block;
+    height: 100%;
+    width: 16.666%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #1f86ff, #3cc5c8);
+    box-shadow: 0 5px 14px rgba(31, 134, 255, 0.32);
+    transition: width 0.24s ease;
 }
 
 .onboarding-card h3 {
+    position: relative;
+    z-index: 1;
     margin-bottom: 8px;
-    color: #1f63d8;
+    color: #164fba;
+    font-size: 1.38rem;
+    letter-spacing: 0.01em;
 }
 
 .onboarding-card p {
-    color: #4a5f7b;
-    line-height: 1.5;
+    position: relative;
+    z-index: 1;
+    color: #466084;
+    line-height: 1.58;
 }
 
 .onboarding-actions {
+    position: relative;
+    z-index: 1;
     margin-top: 18px;
     display: flex;
     justify-content: space-between;
@@ -177,10 +229,11 @@ body {
 
 .onboarding-btn {
     border: none;
-    border-radius: 8px;
-    padding: 10px 14px;
+    border-radius: 10px;
+    padding: 10px 15px;
     font-weight: 700;
     cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 }
 
 .onboarding-btn:disabled {
@@ -189,13 +242,59 @@ body {
 }
 
 .onboarding-btn.mute {
-    background: #edf2fa;
-    color: #40526b;
+    background: #ecf3ff;
+    color: #36507a;
+}
+
+.onboarding-btn.mute:hover {
+    filter: brightness(1.02);
 }
 
 .onboarding-btn.primary {
-    background: #2575fc;
+    background: linear-gradient(135deg, #2575fc, #1a9bff);
     color: #fff;
+    box-shadow: 0 10px 20px rgba(37, 117, 252, 0.3);
+}
+
+.onboarding-btn.primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px rgba(26, 155, 255, 0.34);
+}
+
+@media (max-width: 640px) {
+    .onboarding-overlay {
+        padding: 14px;
+    }
+
+    .onboarding-card {
+        padding: 18px 16px;
+        border-radius: 14px;
+    }
+
+    .onboarding-card h3 {
+        font-size: 1.16rem;
+    }
+
+    .onboarding-actions {
+        gap: 10px;
+        align-items: stretch;
+    }
+
+    .onboarding-actions > div {
+        flex: 1;
+        justify-content: flex-end;
+    }
+
+    .onboarding-btn {
+        padding: 10px 12px;
+        min-height: 42px;
+    }
+
+    .clear-data-confirm-container {
+        margin: 22% auto;
+        width: min(94vw, 460px);
+        padding: 22px 16px;
+    }
 }
 
 button {
@@ -317,7 +416,7 @@ input, select {
 
 .auth-tabs {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     margin-bottom: 18px;
 }
@@ -1824,13 +1923,25 @@ input, select {
 }
 
 .settings-btn-danger {
-    background: linear-gradient(135deg, #ff6b6b, #e35656);
+    background: linear-gradient(135deg, #ff3b3b, #d91a1a);
     color: #fff;
-    box-shadow: 0 8px 18px rgba(227, 86, 86, 0.24);
+    border: 1px solid rgba(177, 10, 10, 0.34);
+    box-shadow: 0 10px 22px rgba(217, 26, 26, 0.3);
 }
 
 .settings-btn-danger:hover {
-    background: linear-gradient(135deg, #ff7d7d, #ea6161);
+    background: linear-gradient(135deg, #ff5252, #e12525);
+}
+
+#app #clearUserDataBtn {
+    background: linear-gradient(135deg, #ff3b3b, #d91a1a) !important;
+    border-color: rgba(177, 10, 10, 0.34) !important;
+    box-shadow: 0 10px 22px rgba(217, 26, 26, 0.3) !important;
+    letter-spacing: 0.01em;
+}
+
+#app #clearUserDataBtn:hover {
+    background: linear-gradient(135deg, #ff5252, #e12525) !important;
 }
 
 .settings-full-btn {
@@ -1848,6 +1959,49 @@ input, select {
     border: 1px solid #4a5e83;
     background: #1d2638;
     color: #e6edff;
+}
+
+.clear-data-confirm-container {
+    border: 1px solid rgba(220, 53, 69, 0.26);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 242, 244, 0.96) 100%);
+}
+
+.clear-data-title {
+    color: #c11f2f;
+}
+
+.clear-data-instruction {
+    margin: 0 0 12px;
+    color: #70444b;
+    line-height: 1.5;
+}
+
+#clearDataConfirmInput {
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    border: 2px solid #f0b2ba;
+    background: #fff;
+}
+
+#clearDataConfirmInput:focus {
+    border-color: #de4a5a;
+    box-shadow: 0 0 0 3px rgba(222, 74, 90, 0.14);
+}
+
+#clearDataConfirmSubmitBtn {
+    background: linear-gradient(135deg, #ff3b3b, #d61a1a);
+}
+
+#clearDataConfirmSubmitBtn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.clear-data-error {
+    margin: 4px 0 0;
+    color: #c21f30;
+    font-size: 13px;
+    font-weight: 600;
 }
 
 /* ================= CART ITEMS STYLING ================= */
@@ -2567,34 +2721,51 @@ body.dark-mode .modal-close:hover {
 }
 
 body.dark-mode .onboarding-overlay {
-    background: rgba(5, 10, 18, 0.8);
+    background:
+        radial-gradient(circle at 12% 16%, rgba(46, 115, 255, 0.2) 0%, rgba(46, 115, 255, 0) 42%),
+        radial-gradient(circle at 84% 14%, rgba(42, 195, 196, 0.18) 0%, rgba(42, 195, 196, 0) 40%),
+        rgba(4, 10, 20, 0.84);
 }
 
 body.dark-mode .onboarding-card {
-    background: #121c2d;
-    border: 1px solid rgba(82, 143, 247, 0.35);
+    background: linear-gradient(145deg, rgba(12, 21, 38, 0.95) 0%, rgba(14, 28, 49, 0.95) 100%);
+    border: 1px solid rgba(96, 153, 255, 0.26);
     box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
 }
 
+body.dark-mode .onboarding-glow {
+    background: radial-gradient(circle, rgba(56, 122, 255, 0.34) 0%, rgba(56, 122, 255, 0) 72%);
+}
+
 body.dark-mode .onboarding-step {
-    color: #86b3ff;
+    color: #9ec1ff;
+}
+
+body.dark-mode .onboarding-progress {
+    background: rgba(132, 167, 240, 0.18);
+}
+
+body.dark-mode .onboarding-progress span {
+    background: linear-gradient(90deg, #4a93ff, #2ed4cb);
+    box-shadow: 0 8px 16px rgba(52, 145, 255, 0.26);
 }
 
 body.dark-mode .onboarding-card h3 {
-    color: #9fc0ff;
+    color: #a8c7ff;
 }
 
 body.dark-mode .onboarding-card p {
-    color: #c4d6f2;
+    color: #c4d8fa;
 }
 
 body.dark-mode .onboarding-btn.mute {
-    background: #2b3a51;
-    color: #d9e5fb;
+    background: #25334b;
+    color: #d8e4fb;
 }
 
 body.dark-mode .onboarding-btn.primary {
-    background: #2d7dff;
+    background: linear-gradient(135deg, #2f81ff, #18b5ed);
+    box-shadow: 0 10px 24px rgba(31, 136, 255, 0.3);
 }
 
 /* ================= NO DATA MESSAGE ================= */
@@ -4005,8 +4176,51 @@ body.dark-mode .settings-btn-primary {
 }
 
 body.dark-mode .settings-btn-danger {
-    background: linear-gradient(135deg, #ff6b6b, #d65555);
-    box-shadow: 0 10px 22px rgba(224, 88, 88, 0.28);
+    background: linear-gradient(135deg, #ff5555, #c71515);
+    border-color: rgba(255, 120, 120, 0.25);
+    box-shadow: 0 10px 22px rgba(206, 31, 31, 0.36);
+}
+
+body.dark-mode #app #clearUserDataBtn {
+    background: linear-gradient(135deg, #ff5555, #c71515) !important;
+    border-color: rgba(255, 120, 120, 0.25) !important;
+    box-shadow: 0 10px 22px rgba(206, 31, 31, 0.36) !important;
+}
+
+body.dark-mode #app #clearUserDataBtn:hover {
+    background: linear-gradient(135deg, #ff676f, #d81a2b) !important;
+}
+
+body.dark-mode .clear-data-confirm-container {
+    background: linear-gradient(145deg, rgba(40, 12, 18, 0.95) 0%, rgba(62, 16, 25, 0.93) 100%);
+    border-color: rgba(255, 119, 119, 0.26);
+}
+
+body.dark-mode .clear-data-title {
+    color: #ff9ca4;
+}
+
+body.dark-mode .clear-data-instruction {
+    color: #f0c7cc;
+}
+
+body.dark-mode #clearDataConfirmInput {
+    background: rgba(18, 7, 11, 0.86);
+    border-color: rgba(255, 124, 136, 0.34);
+    color: #ffeef0;
+}
+
+body.dark-mode #clearDataConfirmInput:focus {
+    border-color: #ff7a88;
+    box-shadow: 0 0 0 3px rgba(255, 122, 136, 0.2);
+}
+
+body.dark-mode #clearDataConfirmSubmitBtn {
+    background: linear-gradient(135deg, #ff5b65, #d21925);
+}
+
+body.dark-mode .clear-data-error {
+    color: #ffadb5;
 }
 
 body.dark-mode .settings-theme-btn {
@@ -5016,4 +5230,79 @@ body.dark-mode #addSale .sale-action-row .clear-cart-btn {
     padding: 0 16px !important;
     font-size: 16px !important;
     border-radius: 10px !important;
+}
+/* Google Sign-In Button Styles */
+.divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 20px 0;
+    color: #666;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.divider span {
+    padding: 0 10px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.google-signin-container {
+    margin: 15px 0;
+}
+
+.google-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px;
+    background: white;
+    border: 2px solid #e1e5e9;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.google-btn:hover {
+    background: #f8f9fa;
+    border-color: #2575fc;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(37, 117, 252, 0.2);
+}
+
+.google-btn img {
+    width: 22px;
+    height: 22px;
+}
+
+/* Dark mode support */
+body.dark-mode .google-btn {
+    background: #2a2f4f;
+    border-color: #404b7c;
+    color: #e1e5e9;
+}
+
+body.dark-mode .google-btn:hover {
+    background: #333a5f;
+    border-color: #667eea;
+}
+
+body.dark-mode .divider::before,
+body.dark-mode .divider::after {
+    border-bottom-color: #404b7c;
+}
+
+body.dark-mode .divider span {
+    color: #8f9bb5;
 }
