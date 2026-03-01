@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <script src="libs/jspdf.umd.min.js"></script>
@@ -113,6 +113,8 @@
             width: 100%;
             height: 100%;
             background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(7px);
+            -webkit-backdrop-filter: blur(7px);
             z-index: 2001;
         }
         
@@ -734,8 +736,8 @@
         #loginScreen .login-card {
             position: relative;
             z-index: 3;
-            width: min(520px, 94vw);
-            padding: clamp(24px, 3.4vw, 40px);
+            width: min(620px, 95vw);
+            padding: clamp(28px, 3.8vw, 46px);
             border-radius: 30px;
             background: linear-gradient(160deg, rgba(255, 255, 255, 0.88), rgba(247, 252, 255, 0.72));
             border: 1px solid rgba(255, 255, 255, 0.9);
@@ -780,7 +782,7 @@
 
         #loginScreen .auth-tabs {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 6px;
             padding: 5px;
             border-radius: 14px;
@@ -1080,9 +1082,9 @@
             }
 
             #loginScreen .login-card {
-                width: min(440px, 94vw);
+                width: min(500px, 95vw);
                 border-radius: 24px;
-                padding: 22px 16px 18px;
+                padding: 24px 18px 20px;
             }
 
             #loginScreen .login-card h2 {
@@ -1105,10 +1107,1003 @@
             }
         }
 
+        /* ================= APP INTERIOR VISUAL MATCH ================= */
+        #app {
+            --maw-accent-1: #0d7ce3;
+            --maw-accent-2: #00b8c5;
+            --maw-accent-3: #5fd9ff;
+            --maw-ink: #083c68;
+            --maw-ink-soft: #3a6688;
+            --maw-surface: rgba(255, 255, 255, 0.74);
+            --maw-surface-strong: rgba(255, 255, 255, 0.86);
+            --maw-border: rgba(14, 122, 192, 0.25);
+            --maw-shadow: 0 24px 58px rgba(7, 63, 109, 0.18);
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: clamp(10px, 2vw, 22px) 0 16px;
+            font-family: 'Space Grotesk', 'Sora', 'Trebuchet MS', sans-serif;
+            background:
+                radial-gradient(circle at 12% 14%, rgba(60, 184, 255, 0.3) 0%, rgba(60, 184, 255, 0) 42%),
+                radial-gradient(circle at 86% 12%, rgba(0, 203, 205, 0.24) 0%, rgba(0, 203, 205, 0) 38%),
+                radial-gradient(circle at 72% 86%, rgba(52, 142, 255, 0.2) 0%, rgba(52, 142, 255, 0) 44%),
+                linear-gradient(140deg, #f7fcff 0%, #dcf1ff 50%, #c9e8ff 100%);
+            overflow-x: clip;
+        }
+
+        #app::before {
+            content: '';
+            position: absolute;
+            inset: -30%;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.34;
+            background-image: repeating-linear-gradient(
+                145deg,
+                rgba(9, 125, 196, 0.08) 0px,
+                rgba(9, 125, 196, 0.08) 2px,
+                rgba(255, 255, 255, 0) 2px,
+                rgba(255, 255, 255, 0) 24px
+            );
+            animation: mawAppDrift 32s linear infinite;
+        }
+
+        #app::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 48% 4%, rgba(255, 255, 255, 0.48) 0%, rgba(255, 255, 255, 0) 38%),
+                radial-gradient(circle at 18% 90%, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 36%);
+        }
+
+        #app > .top-bar,
+        #app > .nav-buttons,
+        #app > .page-container,
+        #app > .footer {
+            width: calc(100% - 18px);
+            max-width: 100%;
+            margin-inline: auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        #app .top-bar {
+            margin-top: 2px;
+            margin-bottom: 10px;
+            padding: 12px 14px;
+            border-radius: 22px;
+            background: linear-gradient(160deg, var(--maw-surface-strong), var(--maw-surface));
+            border: 1px solid var(--maw-border);
+            box-shadow: var(--maw-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(12px) saturate(128%);
+            -webkit-backdrop-filter: blur(12px) saturate(128%);
+            transition: transform 0.28s ease, opacity 0.24s ease, box-shadow 0.24s ease;
+        }
+
+        #app .top-bar .logo {
+            font-family: 'Sora', 'Space Grotesk', sans-serif;
+            letter-spacing: 0.11em;
+            font-weight: 800;
+            color: var(--maw-ink);
+            text-transform: uppercase;
+            text-shadow: 0 8px 22px rgba(22, 124, 198, 0.2);
+        }
+
+        #app .top-bar-logo {
+            border-radius: 14px;
+            box-shadow: 0 14px 26px rgba(16, 85, 140, 0.25);
+        }
+
+        #app .active-user-badge {
+            border-radius: 999px;
+            padding: 7px 12px;
+            border: 1px solid rgba(11, 122, 192, 0.24);
+            background: rgba(255, 255, 255, 0.72);
+            color: #0f5b8f;
+            font-weight: 700;
+            font-size: 0.82rem;
+            letter-spacing: 0.01em;
+        }
+
+        #app .logout-btn,
+        #app .top-settings-btn {
+            border-radius: 12px;
+            border: 1px solid rgba(10, 128, 198, 0.22);
+            background: rgba(255, 255, 255, 0.74);
+            color: #14598a;
+            box-shadow: 0 10px 18px rgba(16, 81, 130, 0.15);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        #app .top-settings-btn {
+            min-width: 42px;
+            min-height: 42px;
+        }
+
+        #app .logout-btn:hover,
+        #app .top-settings-btn:hover {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 14px 24px rgba(16, 81, 130, 0.2);
+        }
+
+        #app .nav-buttons {
+            margin-bottom: 12px;
+            border-radius: 20px;
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.76), rgba(244, 251, 255, 0.66));
+            border: 1px solid var(--maw-border);
+            box-shadow: 0 18px 42px rgba(10, 70, 120, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+            backdrop-filter: blur(10px) saturate(122%);
+            -webkit-backdrop-filter: blur(10px) saturate(122%);
+            transition: transform 0.28s ease, opacity 0.24s ease, box-shadow 0.24s ease;
+        }
+
+        #app .nav-btn {
+            border-radius: 12px;
+            border: 1px solid rgba(17, 118, 188, 0.18);
+            background: rgba(255, 255, 255, 0.78);
+            color: #1b5f8f;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            transition: all 0.2s ease;
+        }
+
+        #app .nav-btn:hover {
+            transform: translateY(-1px);
+            border-color: rgba(17, 118, 188, 0.34);
+            background: rgba(255, 255, 255, 0.94);
+            color: #0b5488;
+        }
+
+        #app .nav-btn.active {
+            color: #fff;
+            border-color: rgba(66, 196, 255, 0.55);
+            background: linear-gradient(135deg, var(--maw-accent-1) 0%, var(--maw-accent-2) 100%);
+            box-shadow: 0 10px 22px rgba(14, 124, 200, 0.33);
+        }
+
+        #app .page-container {
+            border-radius: 24px;
+            padding: clamp(16px, 2.3vw, 28px);
+            flex: 1 1 auto;
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.52), rgba(239, 249, 255, 0.44));
+            border: 1px solid rgba(255, 255, 255, 0.62);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66), 0 18px 40px rgba(8, 66, 116, 0.12);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+
+        #app .page-header h2,
+        #app .settings-card-title,
+        #app .range-panel-title {
+            font-family: 'Sora', 'Space Grotesk', sans-serif;
+            letter-spacing: 0.04em;
+            color: var(--maw-ink);
+            text-transform: uppercase;
+        }
+
+        #app .page-description,
+        #app .settings-help-text,
+        #app .range-note {
+            color: var(--maw-ink-soft);
+        }
+
+        #app :is(.dashboard-card, .stat-card, .sale-left, .sale-right, .customer-controls, .customer-list, .deposit-list, .report-output, .report-range-panel, .settings-card) {
+            background: linear-gradient(160deg, var(--maw-surface-strong), var(--maw-surface)) !important;
+            border: 1px solid var(--maw-border) !important;
+            border-radius: 22px !important;
+            box-shadow: var(--maw-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.78) !important;
+            backdrop-filter: blur(12px) saturate(124%);
+            -webkit-backdrop-filter: blur(12px) saturate(124%);
+        }
+
+        #app .home-hero-card {
+            background: linear-gradient(135deg, #0d7ce3 0%, #00b6c4 100%) !important;
+            border-color: rgba(136, 216, 255, 0.58) !important;
+            box-shadow: 0 24px 42px rgba(7, 88, 150, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.26) !important;
+        }
+
+        #app .home-hero-card h3,
+        #app .home-hero-card h1,
+        #app .home-hero-card p {
+            color: #fff !important;
+        }
+
+        #app .home-chip {
+            border: 1px solid rgba(255, 255, 255, 0.34);
+            background: rgba(255, 255, 255, 0.18);
+            color: #eef9ff;
+        }
+
+        #app .home-chip.muted {
+            background: rgba(9, 52, 83, 0.25);
+            color: #cbefff;
+        }
+
+        #app :is(input, select, textarea, .search-input) {
+            border-radius: 12px !important;
+            border: 1.6px solid rgba(17, 116, 184, 0.24) !important;
+            background: rgba(255, 255, 255, 0.84) !important;
+            color: #11446d !important;
+            font-family: 'Space Grotesk', 'Sora', sans-serif;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
+        }
+
+        #app :is(input, select, textarea, .search-input)::placeholder {
+            color: #7ea8c9;
+        }
+
+        #app :is(input, select, textarea, .search-input):focus {
+            outline: none;
+            border-color: #1297dd !important;
+            box-shadow: 0 0 0 4px rgba(18, 151, 221, 0.16);
+            background: #fff !important;
+            transform: translateY(-1px);
+        }
+
+        #app :is(.add-btn, .report-btn, .settings-btn, .confirm-btn) {
+            border-radius: 12px !important;
+            border: 1px solid rgba(66, 196, 255, 0.42) !important;
+            color: #fff !important;
+            background: linear-gradient(135deg, var(--maw-accent-1) 0%, var(--maw-accent-2) 100%) !important;
+            box-shadow: 0 12px 24px rgba(11, 117, 186, 0.29);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+        }
+
+        #app :is(.add-btn, .report-btn, .settings-btn, .confirm-btn):hover {
+            transform: translateY(-1px);
+            box-shadow: 0 16px 28px rgba(11, 117, 186, 0.34);
+            filter: saturate(1.05);
+        }
+
+        #app .clear-cart-btn {
+            border-radius: 12px !important;
+            border: 1px solid rgba(255, 166, 166, 0.58) !important;
+            background: linear-gradient(135deg, #f2607b, #eb4a63) !important;
+            color: #fff !important;
+            box-shadow: 0 12px 24px rgba(208, 59, 91, 0.28);
+        }
+
+        #app .filter-btn {
+            border-radius: 10px;
+            border: 1px solid rgba(14, 120, 190, 0.24);
+            background: rgba(255, 255, 255, 0.72);
+            color: #1f5f8f;
+            font-weight: 700;
+        }
+
+        #app .filter-btn.active {
+            color: #fff;
+            border-color: rgba(61, 187, 255, 0.52);
+            background: linear-gradient(135deg, #0f7fdf, #00b5c3);
+            box-shadow: 0 10px 20px rgba(14, 121, 191, 0.3);
+        }
+
+        #app .stock-warning-banner {
+            margin-top: 14px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 173, 94, 0.48);
+            background: linear-gradient(135deg, rgba(255, 243, 217, 0.95), rgba(255, 233, 186, 0.88));
+            color: #7a4500;
+            font-weight: 700;
+            box-shadow: 0 12px 24px rgba(141, 92, 5, 0.16);
+        }
+
+        #app .stock-warning-banner strong {
+            font-family: 'Sora', 'Space Grotesk', sans-serif;
+            letter-spacing: 0.02em;
+        }
+
+        #app .stock-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        #app .admin-summary-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        #app .stock-summary-card {
+            border-radius: 16px;
+            padding: 14px;
+            border: 1px solid rgba(11, 122, 192, 0.22);
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.86), rgba(240, 250, 255, 0.72));
+            box-shadow: 0 12px 22px rgba(16, 81, 130, 0.13);
+        }
+
+        #app .stock-summary-card h4 {
+            margin: 0 0 4px;
+            color: #1f5f8f;
+            font-size: 0.92rem;
+            font-weight: 700;
+        }
+
+        #app .stock-summary-card h2 {
+            margin: 0;
+            color: #0e4f7d;
+            font-size: 1.5rem;
+            font-family: 'Sora', 'Space Grotesk', sans-serif;
+        }
+
+        #app .stock-summary-card.warning {
+            border-color: rgba(255, 179, 0, 0.34);
+            background: linear-gradient(160deg, rgba(255, 250, 228, 0.95), rgba(255, 239, 197, 0.84));
+        }
+
+        #app .stock-summary-card.warning h2 {
+            color: #ad6900;
+        }
+
+        #app .stock-summary-card.danger {
+            border-color: rgba(255, 94, 113, 0.38);
+            background: linear-gradient(160deg, rgba(255, 237, 240, 0.95), rgba(255, 214, 223, 0.84));
+        }
+
+        #app .stock-summary-card.danger h2 {
+            color: #b41f3d;
+        }
+
+        #app .stock-table-wrap {
+            margin-top: 16px;
+            overflow-x: auto;
+            border-radius: 16px;
+            border: 1px solid rgba(17, 120, 190, 0.18);
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        #app #stockManagementTable {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 880px;
+        }
+
+        #app #adminUsersTable {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 980px;
+        }
+
+        #app #stockManagementTable th,
+        #app #stockManagementTable td,
+        #app #adminUsersTable th,
+        #app #adminUsersTable td {
+            padding: 10px 9px;
+            border-bottom: 1px solid rgba(16, 112, 179, 0.12);
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        #app #stockManagementTable th,
+        #app #adminUsersTable th {
+            background: linear-gradient(135deg, rgba(12, 123, 205, 0.13), rgba(0, 181, 195, 0.11));
+            color: #0f5889;
+            font-family: 'Sora', 'Space Grotesk', sans-serif;
+            font-size: 0.83rem;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        #app .admin-contact-line {
+            margin-top: 4px;
+            font-size: 0.8rem;
+            color: #5f7f9d;
+        }
+
+        #app .admin-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            border: 1px solid transparent;
+        }
+
+        #app .admin-role-owner {
+            background: rgba(106, 74, 255, 0.14);
+            color: #4a2ac8;
+            border-color: rgba(106, 74, 255, 0.24);
+        }
+
+        #app .admin-role-admin {
+            background: rgba(16, 130, 241, 0.16);
+            color: #0c5fba;
+            border-color: rgba(16, 130, 241, 0.24);
+        }
+
+        #app .admin-role-staff {
+            background: rgba(148, 168, 188, 0.2);
+            color: #52667e;
+            border-color: rgba(130, 151, 173, 0.3);
+        }
+
+        #app .admin-status-active {
+            background: rgba(40, 200, 125, 0.15);
+            color: #126c43;
+            border-color: rgba(40, 200, 125, 0.25);
+        }
+
+        #app .admin-status-inactive {
+            background: rgba(255, 86, 106, 0.16);
+            color: #a5243f;
+            border-color: rgba(255, 86, 106, 0.3);
+        }
+
+        #app .admin-action-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        #app .admin-action-btn {
+            border-radius: 8px;
+            border: 1px solid rgba(66, 196, 255, 0.42);
+            color: #fff;
+            background: linear-gradient(135deg, var(--maw-accent-1) 0%, var(--maw-accent-2) 100%);
+            padding: 7px 10px;
+            font-size: 0.77rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        #app .admin-action-btn.secondary {
+            background: linear-gradient(135deg, #5889b9, #4278ab);
+            border-color: rgba(88, 137, 185, 0.5);
+        }
+
+        #app .admin-action-btn.danger {
+            background: linear-gradient(135deg, #f2607b, #eb4a63);
+            border-color: rgba(255, 166, 166, 0.58);
+        }
+
+        #app .admin-action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            filter: grayscale(0.1);
+        }
+
+        #app .admin-tools-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+            margin-bottom: 12px;
+        }
+
+        #app .admin-tool-card {
+            border-radius: 18px !important;
+        }
+
+        #app .admin-ai-insights {
+            border-radius: 12px;
+            border: 1px solid rgba(17, 116, 184, 0.2);
+            background: rgba(255, 255, 255, 0.78);
+            padding: 12px;
+            min-height: 120px;
+            color: #325a7a;
+            line-height: 1.45;
+        }
+
+        #app .admin-ai-insights ul {
+            margin: 0;
+            padding-left: 18px;
+        }
+
+        #app #adminDailySummaryTable {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 760px;
+        }
+
+        #app #adminDailySummaryTable th,
+        #app #adminDailySummaryTable td {
+            padding: 10px 9px;
+            border-bottom: 1px solid rgba(16, 112, 179, 0.12);
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        #app #adminDailySummaryTable th {
+            background: linear-gradient(135deg, rgba(12, 123, 205, 0.13), rgba(0, 181, 195, 0.11));
+            color: #0f5889;
+            font-family: 'Sora', 'Space Grotesk', sans-serif;
+            font-size: 0.83rem;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        #app .stock-status-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            border: 1px solid transparent;
+        }
+
+        #app .stock-status-ok {
+            background: rgba(40, 200, 125, 0.15);
+            color: #126c43;
+            border-color: rgba(40, 200, 125, 0.25);
+        }
+
+        #app .stock-status-low {
+            background: rgba(255, 179, 0, 0.18);
+            color: #935600;
+            border-color: rgba(255, 179, 0, 0.32);
+        }
+
+        #app .stock-status-out {
+            background: rgba(255, 86, 106, 0.16);
+            color: #a5243f;
+            border-color: rgba(255, 86, 106, 0.3);
+        }
+
+        #app .stock-edit-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        #app .stock-edit-row input {
+            width: 86px;
+            min-width: 86px;
+            padding: 7px 8px;
+            font-size: 0.83rem;
+        }
+
+        #app .stock-action-btn {
+            border-radius: 8px;
+            border: 1px solid rgba(66, 196, 255, 0.42);
+            color: #fff;
+            background: linear-gradient(135deg, var(--maw-accent-1) 0%, var(--maw-accent-2) 100%);
+            padding: 7px 10px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        #app .stock-action-btn.danger {
+            background: linear-gradient(135deg, #f2607b, #eb4a63);
+            border-color: rgba(255, 166, 166, 0.58);
+        }
+
+        #app #salesHistoryTable {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            overflow: hidden;
+            border-radius: 16px;
+            border: 1px solid rgba(17, 120, 190, 0.18);
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        #app #salesHistoryTable thead th {
+            background: linear-gradient(135deg, rgba(12, 123, 205, 0.13), rgba(0, 181, 195, 0.11));
+            color: #0f5889;
+            font-family: 'Sora', 'Space Grotesk', sans-serif;
+            letter-spacing: 0.03em;
+        }
+
+        #app #salesHistoryTable th,
+        #app #salesHistoryTable td {
+            border-bottom: 1px solid rgba(16, 112, 179, 0.12);
+        }
+
+        #app #salesHistoryTable tbody tr:hover {
+            background: rgba(171, 227, 255, 0.15);
+        }
+
+        #app #addSale .sale-right > div[style*="background"] {
+            background: linear-gradient(160deg, rgba(244, 251, 255, 0.86), rgba(232, 246, 255, 0.72)) !important;
+            border: 1px solid rgba(14, 122, 192, 0.22) !important;
+            border-radius: 16px !important;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 24px rgba(10, 70, 120, 0.1) !important;
+        }
+
+        #app #addSale .sale-right > div[style*="background"] h4 {
+            color: #0f5e92 !important;
+            letter-spacing: 0.03em;
+        }
+
+        #app #addSale #cartItems {
+            background: rgba(255, 255, 255, 0.74) !important;
+            border: 1px solid rgba(16, 118, 187, 0.2) !important;
+            border-radius: 12px !important;
+        }
+
+        #app #addSale button[onclick="addToCart()"] {
+            border: 1px solid rgba(66, 196, 255, 0.42) !important;
+            background: linear-gradient(135deg, var(--maw-accent-1) 0%, var(--maw-accent-2) 100%) !important;
+            box-shadow: 0 12px 22px rgba(10, 121, 193, 0.28) !important;
+        }
+
+        #app #addSale .total-display {
+            border: 1px solid rgba(112, 214, 255, 0.48) !important;
+            box-shadow: 0 18px 32px rgba(15, 112, 175, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+        }
+
+        #app .footer {
+            margin-top: 14px;
+            margin-bottom: 6px;
+            border-radius: 16px;
+            border: 1px solid rgba(14, 122, 192, 0.24);
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.78), rgba(241, 250, 255, 0.68));
+            box-shadow: 0 14px 30px rgba(10, 70, 120, 0.12);
+            color: #175784;
+        }
+
+        #app .footer p {
+            letter-spacing: 0.04em;
+            font-weight: 700;
+            font-family: 'Sora', 'Space Grotesk', sans-serif;
+        }
+
+        @keyframes mawAppDrift {
+            from { transform: translate3d(0, 0, 0); }
+            to { transform: translate3d(120px, 80px, 0); }
+        }
+
+        body.dark-mode #app {
+            --maw-ink: #d4ecff;
+            --maw-ink-soft: #99bfdc;
+            --maw-surface: rgba(10, 24, 42, 0.8);
+            --maw-surface-strong: rgba(15, 30, 51, 0.88);
+            --maw-border: rgba(124, 193, 255, 0.28);
+            --maw-shadow: 0 28px 60px rgba(0, 0, 0, 0.45);
+            background:
+                radial-gradient(circle at 13% 18%, rgba(37, 130, 214, 0.34) 0%, rgba(37, 130, 214, 0) 42%),
+                radial-gradient(circle at 88% 12%, rgba(0, 170, 180, 0.3) 0%, rgba(0, 170, 180, 0) 38%),
+                radial-gradient(circle at 75% 87%, rgba(88, 158, 255, 0.22) 0%, rgba(88, 158, 255, 0) 44%),
+                linear-gradient(140deg, #061324 0%, #0b1d34 54%, #132d49 100%);
+        }
+
+        body.dark-mode #app::before {
+            opacity: 0.24;
+        }
+
+        body.dark-mode #app .top-bar,
+        body.dark-mode #app .nav-buttons,
+        body.dark-mode #app .page-container,
+        body.dark-mode #app .footer,
+        body.dark-mode #app :is(.dashboard-card, .stat-card, .sale-left, .sale-right, .customer-controls, .customer-list, .deposit-list, .report-output, .report-range-panel, .settings-card) {
+            box-shadow: var(--maw-shadow), inset 0 1px 0 rgba(195, 231, 255, 0.1) !important;
+        }
+
+        body.dark-mode #app :is(input, select, textarea, .search-input) {
+            background: rgba(7, 20, 37, 0.8) !important;
+            border-color: rgba(122, 187, 244, 0.34) !important;
+            color: #def3ff !important;
+        }
+
+        body.dark-mode #app :is(input, select, textarea, .search-input)::placeholder {
+            color: #7ea6c7;
+        }
+
+        body.dark-mode #app .nav-btn {
+            background: rgba(18, 34, 56, 0.88);
+            border-color: rgba(129, 163, 206, 0.34);
+            color: #c9dfff;
+        }
+
+        body.dark-mode #app .nav-btn:hover {
+            background: rgba(24, 42, 69, 0.92);
+            color: #e8f4ff;
+            border-color: rgba(157, 204, 255, 0.46);
+        }
+
+        body.dark-mode #app .active-user-badge,
+        body.dark-mode #app .logout-btn,
+        body.dark-mode #app .top-settings-btn {
+            background: rgba(9, 25, 44, 0.72);
+            border-color: rgba(132, 196, 245, 0.3);
+            color: #bfe5ff;
+        }
+
+        body.dark-mode #app #salesHistoryTable {
+            background: rgba(8, 21, 37, 0.72);
+            border-color: rgba(122, 187, 244, 0.28);
+        }
+
+        body.dark-mode #app #salesHistoryTable thead th {
+            background: linear-gradient(135deg, rgba(36, 104, 167, 0.34), rgba(8, 151, 162, 0.26));
+            color: #d6efff;
+        }
+
+        body.dark-mode #app .stock-warning-banner {
+            background: linear-gradient(135deg, rgba(88, 63, 17, 0.9), rgba(74, 51, 12, 0.88));
+            border-color: rgba(255, 196, 108, 0.36);
+            color: #ffdba0;
+        }
+
+        body.dark-mode #app .stock-summary-card {
+            background: linear-gradient(160deg, rgba(15, 30, 51, 0.88), rgba(10, 24, 42, 0.8));
+            border-color: rgba(124, 193, 255, 0.28);
+            box-shadow: 0 14px 26px rgba(0, 0, 0, 0.34);
+        }
+
+        body.dark-mode #app .stock-summary-card h4 {
+            color: #9bc3e3;
+        }
+
+        body.dark-mode #app .stock-summary-card h2 {
+            color: #d6efff;
+        }
+
+        body.dark-mode #app .stock-summary-card.warning {
+            background: linear-gradient(160deg, rgba(69, 52, 15, 0.9), rgba(54, 41, 10, 0.86));
+            border-color: rgba(255, 196, 108, 0.32);
+        }
+
+        body.dark-mode #app .stock-summary-card.warning h2 {
+            color: #ffcf7f;
+        }
+
+        body.dark-mode #app .stock-summary-card.danger {
+            background: linear-gradient(160deg, rgba(72, 23, 36, 0.9), rgba(57, 18, 29, 0.86));
+            border-color: rgba(255, 122, 146, 0.34);
+        }
+
+        body.dark-mode #app .stock-summary-card.danger h2 {
+            color: #ffacc0;
+        }
+
+        body.dark-mode #app .stock-table-wrap {
+            background: rgba(8, 21, 37, 0.72);
+            border-color: rgba(122, 187, 244, 0.28);
+        }
+
+        body.dark-mode #app #stockManagementTable th {
+            background: linear-gradient(135deg, rgba(36, 104, 167, 0.34), rgba(8, 151, 162, 0.26));
+            color: #d6efff;
+        }
+
+        body.dark-mode #app #adminUsersTable th {
+            background: linear-gradient(135deg, rgba(36, 104, 167, 0.34), rgba(8, 151, 162, 0.26));
+            color: #d6efff;
+        }
+
+        body.dark-mode #app .admin-contact-line {
+            color: #90b3d0;
+        }
+
+        body.dark-mode #app .admin-role-owner {
+            background: rgba(131, 114, 255, 0.2);
+            color: #dddcff;
+            border-color: rgba(131, 114, 255, 0.32);
+        }
+
+        body.dark-mode #app .admin-role-admin {
+            background: rgba(86, 175, 255, 0.2);
+            color: #d6efff;
+            border-color: rgba(86, 175, 255, 0.32);
+        }
+
+        body.dark-mode #app .admin-role-staff {
+            background: rgba(105, 128, 156, 0.28);
+            color: #d1e1f6;
+            border-color: rgba(117, 145, 177, 0.38);
+        }
+
+        body.dark-mode #app .admin-status-active {
+            background: rgba(44, 184, 110, 0.24);
+            color: #c8f3de;
+            border-color: rgba(44, 184, 110, 0.34);
+        }
+
+        body.dark-mode #app .admin-status-inactive {
+            background: rgba(255, 99, 122, 0.24);
+            color: #ffd3dc;
+            border-color: rgba(255, 127, 146, 0.36);
+        }
+
+        body.dark-mode #app .admin-ai-insights {
+            background: rgba(8, 21, 37, 0.72);
+            border-color: rgba(122, 187, 244, 0.3);
+            color: #c5dff7;
+        }
+
+        body.dark-mode #app #adminDailySummaryTable th {
+            background: linear-gradient(135deg, rgba(36, 104, 167, 0.34), rgba(8, 151, 162, 0.26));
+            color: #d6efff;
+        }
+
+        body.dark-mode #app #addSale .total-display {
+            background: linear-gradient(135deg, rgba(22, 46, 70, 0.96), rgba(17, 64, 82, 0.94), rgba(18, 86, 79, 0.92)) !important;
+            color: #d9edf8 !important;
+            border: 1px solid rgba(122, 187, 244, 0.34) !important;
+            box-shadow: 0 18px 32px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+        }
+
+        body.dark-mode #app #addSale .total-display p {
+            color: #9cc5de !important;
+            opacity: 1 !important;
+        }
+
+        body.dark-mode #app #addSale #saleTotal {
+            color: #e6f4ff !important;
+        }
+
+        @media (max-width: 980px) {
+            #app > .top-bar,
+            #app > .nav-buttons,
+            #app > .page-container,
+            #app > .footer {
+                width: calc(100% - 10px);
+            }
+
+            #app .top-bar {
+                border-radius: 16px;
+                gap: 10px;
+            }
+
+            #app .active-user-badge {
+                order: 3;
+                width: 100%;
+                justify-content: center;
+            }
+
+            #app .nav-buttons {
+                border-radius: 14px;
+                padding: 10px;
+            }
+
+            #app .nav-group-main {
+                width: 100%;
+            }
+
+            #app .nav-btn {
+                flex: 1 1 calc(50% - 8px);
+            }
+
+            #app .page-container {
+                border-radius: 16px;
+                padding: 14px;
+            }
+        }
+
+        @media (max-width: 900px) {
+            #app .top-bar {
+                position: sticky;
+                top: 8px;
+                z-index: 42;
+            }
+
+            #app .nav-buttons {
+                position: sticky;
+                top: 70px;
+                z-index: 41;
+                padding: 8px;
+            }
+
+            #app .nav-group-main {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 8px;
+                width: 100%;
+            }
+
+            #app .nav-btn {
+                width: 100%;
+                min-height: 44px;
+                padding: 8px 6px;
+                flex: 0 0 auto;
+            }
+
+            #app .nav-label {
+                display: block;
+                white-space: normal;
+                word-break: break-word;
+                line-height: 1.1;
+                font-size: 0.74rem;
+            }
+
+            #app.chrome-hidden .top-bar {
+                transform: translateY(calc(-100% - 14px));
+                opacity: 0;
+                pointer-events: none;
+            }
+
+            #app.chrome-hidden .nav-buttons {
+                transform: translateY(calc(-100% - 24px));
+                opacity: 0;
+                pointer-events: none;
+            }
+
+            #app .active-user-badge {
+                display: none !important;
+            }
+
+            #app .nav-group-meta {
+                display: none;
+            }
+
+            #app .top-bar-logo {
+                width: 36px;
+                height: 36px;
+            }
+
+            #app .top-bar .logo {
+                font-size: 0.92rem;
+                letter-spacing: 0.07em;
+            }
+        }
+
+        @media (max-width: 640px) {
+            #app .nav-group-main {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            #app .nav-btn {
+                min-height: 42px;
+                padding: 8px 6px;
+            }
+
+            #app .top-bar {
+                padding: 10px;
+            }
+
+            #app .top-bar .logo {
+                font-size: 0.98rem;
+                letter-spacing: 0.08em;
+            }
+
+            #app .nav-label {
+                font-size: 0.72rem;
+            }
+
+            #app .stock-summary-grid {
+                grid-template-columns: 1fr;
+            }
+
+            #app .admin-summary-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            #app .admin-tools-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 420px) {
+            #app .nav-buttons {
+                padding: 7px;
+                border-radius: 12px;
+            }
+
+            #app .nav-group-main {
+                gap: 6px;
+            }
+
+            #app .nav-btn {
+                min-height: 40px;
+                padding: 7px 5px;
+            }
+
+            #app .nav-label {
+                font-size: 0.69rem;
+            }
+        }
+
         @media (prefers-reduced-motion: reduce) {
             #loginScreen::before,
             #loginScreen .login-card,
-            #loginScreen .login-logo {
+            #loginScreen .login-logo,
+            #app::before {
                 animation: none !important;
             }
         }
@@ -1148,6 +2143,7 @@
         <h2>MAKE A WAY</h2>
         <div class="auth-tabs">
             <button id="authLoginTab" class="auth-tab-btn active" type="button">Login</button>
+            <button id="authAdminTab" class="auth-tab-btn" type="button">Admin</button>
             <button id="authSignupTab" class="auth-tab-btn" type="button">Sign Up</button>
         </div>
 
@@ -1168,12 +2164,12 @@
         
         <div class="input-group">
             <label for="pin">5-digit PIN</label>
-            <input type="password" id="pin" maxlength="5" placeholder="Enter pin" autocomplete="off">
+            <input type="password" id="pin" maxlength="5" inputmode="numeric" pattern="[0-9]{5}" placeholder="Enter pin" autocomplete="off">
         </div>
 
         <div class="input-group" id="confirmPinGroup" style="display: none;">
             <label for="confirmPin">Confirm PIN</label>
-            <input type="password" id="confirmPin" maxlength="5" placeholder="Confirm your PIN" autocomplete="off">
+            <input type="password" id="confirmPin" maxlength="5" inputmode="numeric" pattern="[0-9]{5}" placeholder="Confirm your PIN" autocomplete="off">
         </div>
 
         <div class="input-group" id="signupVerificationGroup" style="display: none;">
@@ -1186,6 +2182,7 @@
         
         <button id="loginBtn" class="login-button">LOGIN</button>
         <button id="signupBtn" class="login-button signup-button" style="display: none;">CREATE ACCOUNT</button>
+        
         <button id="forgotPinBtn" class="auth-link-btn" type="button">Forgot PIN?</button>
 
         <div id="forgotPinPanel" class="forgot-panel" style="display: none;">
@@ -1207,11 +2204,11 @@
             </div>
             <div class="input-group">
                 <label for="resetNewPin">New 5-digit PIN</label>
-                <input type="password" id="resetNewPin" maxlength="5" placeholder="Enter new PIN" autocomplete="off">
+                <input type="password" id="resetNewPin" maxlength="5" inputmode="numeric" pattern="[0-9]{5}" placeholder="Enter new PIN" autocomplete="off">
             </div>
             <div class="input-group">
                 <label for="resetConfirmPin">Confirm New PIN</label>
-                <input type="password" id="resetConfirmPin" maxlength="5" placeholder="Confirm new PIN" autocomplete="off">
+                <input type="password" id="resetConfirmPin" maxlength="5" inputmode="numeric" pattern="[0-9]{5}" placeholder="Confirm new PIN" autocomplete="off">
             </div>
             <button id="resetPinBtn" class="login-button">RESET PIN</button>
             <button id="cancelResetPinBtn" class="auth-link-btn" type="button">Cancel</button>
@@ -1320,6 +2317,22 @@
     </div>
 </div>
 
+<div id="clearDataConfirmOverlay" class="form-overlay">
+    <div class="form-container clear-data-confirm-container" style="max-width: 480px;">
+        <h3 class="form-title clear-data-title" id="clearDataConfirmTitle">Clear User Data</h3>
+        <p id="clearDataConfirmInstruction" class="clear-data-instruction">Type CLEAR USER DATA (all caps) to confirm.</p>
+        <div class="form-group">
+            <label id="clearDataConfirmLabel" for="clearDataConfirmInput">Confirmation Text</label>
+            <input type="text" id="clearDataConfirmInput" placeholder="Type CLEAR USER DATA" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        </div>
+        <p id="clearDataConfirmError" class="clear-data-error" style="display: none;">Text does not match. Type CLEAR USER DATA exactly.</p>
+        <div class="form-buttons">
+            <button id="clearDataConfirmCancelBtn" class="form-btn form-cancel" type="button" onclick="closeClearDataConfirmForm()">Cancel</button>
+            <button id="clearDataConfirmSubmitBtn" class="form-btn form-submit" type="button" onclick="confirmClearAllData()" disabled>Clear User Data</button>
+        </div>
+    </div>
+</div>
+
 <!-- Transaction details modal (used by sales history) -->
 <div id="transactionModal" class="modal">
     <div class="modal-backdrop"></div>
@@ -1365,8 +2378,14 @@
             <button class="nav-btn" data-page="clate" onclick="showPage('clate')">
                 <span class="nav-label">Clate/Deposit</span>
             </button>
+            <button class="nav-btn" data-page="stockManagement" onclick="showPage('stockManagement')">
+                <span class="nav-label">Stock Management</span>
+            </button>
             <button class="nav-btn" data-page="reports" onclick="showPage('reports')">
                 <span class="nav-label">Reports</span>
+            </button>
+            <button id="adminNavBtn" class="nav-btn nav-btn-emphasis" data-page="adminPanel" onclick="showPage('adminPanel')" style="display: none;">
+                <span class="nav-label">Admin Panel</span>
             </button>
         </div>
         <div class="nav-group nav-group-meta">
@@ -1410,6 +2429,7 @@
                         <h2 id="clatesPending">RWF 0</h2>
                     </div>
                 </div>
+                <div id="stockWarningBanner" class="stock-warning-banner" style="display: none;"></div>
             </div>
         </div>
 
@@ -1430,6 +2450,8 @@
                         <input type="text" id="newDrinkName" placeholder="Drink Name">
                         <input type="number" id="newDrinkPrice" placeholder="Price (RWF)">
                         <input type="number" id="newDrinkProfitPerCase" placeholder="Profit/Case (RWF)" min="0">
+                        <input type="number" id="newDrinkStockQty" placeholder="Initial Stock (Cases)" min="0" step="1">
+                        <input type="number" id="newDrinkLowStockThreshold" placeholder="Low Stock Alert Level" min="0" step="1">
                         <button onclick="saveNewDrink()" class="add-btn">Save Drink</button>
                     </div>
                 </div>
@@ -1478,9 +2500,9 @@
                         <select id="customerSelect"></select>
                     </div>
                     
-                    <div class="total-display" style="background: linear-gradient(135deg, #2575fc 0%, #6a11cb 100%); color: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
-                        <p style="margin: 0 0 10px 0; font-size: 14px; opacity: 0.9;">Total Amount</p>
-                        <h2 id="saleTotal" style="color: white; margin: 0;">RWF 0</h2>
+                    <div class="total-display" style="background: linear-gradient(135deg, #e7f6ff 0%, #d6f0ff 58%, #d7f6ef 100%); color: #124d74; padding: 20px; border-radius: 10px; margin: 20px 0; border: 1px solid #b8dff1;">
+                        <p style="margin: 0 0 10px 0; font-size: 14px; opacity: 0.95; color: #3a6f8b;">Total Amount</p>
+                        <h2 id="saleTotal" style="color: #0f517a; margin: 0;">RWF 0</h2>
                     </div>
                     
                     <div class="sale-action-row">
@@ -1488,6 +2510,170 @@
                         <button onclick="clearCart()" class="clear-cart-btn">Clear Cart</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Stock Management Page -->
+        <div id="stockManagement" class="page" style="display: none;">
+            <div class="page-header">
+                <h2>Stock Management</h2>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button onclick="renderStockManagement()" class="add-btn">Refresh</button>
+                    <button onclick="exportStockManagementPDF()" class="add-btn" style="background: #20a37c;">Print PDF</button>
+                </div>
+            </div>
+
+            <p class="page-description">Track drink stock, set low-stock limits, and restock quickly.</p>
+
+            <div class="stock-summary-grid">
+                <div class="stock-summary-card">
+                    <h4>Total Drinks</h4>
+                    <h2 id="stockSummaryTotal">0</h2>
+                </div>
+                <div class="stock-summary-card warning">
+                    <h4>Low Stock</h4>
+                    <h2 id="stockSummaryLow">0</h2>
+                </div>
+                <div class="stock-summary-card danger">
+                    <h4>Out of Stock</h4>
+                    <h2 id="stockSummaryOut">0</h2>
+                </div>
+            </div>
+
+            <div class="customer-controls" style="margin-top: 20px;">
+                <input type="text" id="stockSearch" class="search-input" placeholder="Search drinks..." oninput="renderStockManagement()">
+                <div class="filter-buttons">
+                    <button id="stockFilterAll" class="filter-btn active" onclick="setStockFilter('all', event)">All</button>
+                    <button id="stockFilterLow" class="filter-btn" onclick="setStockFilter('low', event)">Low</button>
+                    <button id="stockFilterOut" class="filter-btn" onclick="setStockFilter('out', event)">Out</button>
+                </div>
+            </div>
+
+            <div class="stock-table-wrap">
+                <table id="stockManagementTable">
+                    <thead>
+                        <tr>
+                            <th>Drink</th>
+                            <th>Price</th>
+                            <th>In Stock</th>
+                            <th>Low Alert</th>
+                            <th>Status</th>
+                            <th>Adjust</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stockManagementBody">
+                        <tr>
+                            <td colspan="6" style="padding: 30px; text-align: center; color: #789;">No drinks available yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Admin Panel Page -->
+        <div id="adminPanel" class="page" style="display: none;">
+            <div class="page-header">
+                <h2 id="adminPanelTitle">Owner Admin Panel</h2>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button onclick="renderAdminPanel()" class="add-btn">Refresh</button>
+                    <button id="adminExportUsersPdfBtn" onclick="exportAdminUsersPDF()" class="add-btn" style="background: #20a37c;">Export Accounts PDF</button>
+                    <button id="adminExportUsersJsonBtn" onclick="exportAdminUsersJSON()" class="add-btn" style="background: #3b82f6;">Export Accounts JSON</button>
+                </div>
+            </div>
+
+            <p id="adminPanelDescription" class="page-description">Find employers, manage account roles, and control who can access this app.</p>
+
+            <div class="admin-tools-grid">
+                <div class="settings-card admin-tool-card">
+                    <h3 id="adminDailyExportTitle" class="settings-card-title" style="margin-bottom: 8px;">Daily Sales Export</h3>
+                    <p id="adminDailyExportDesc" class="settings-help-text" style="margin-bottom: 12px;">Select a specific day and export all sales in ordered time.</p>
+                    <div class="settings-inline-row">
+                        <input type="date" id="adminSalesExportDate">
+                        <button id="adminExportDayPdfBtn" onclick="exportAdminDailySalesPDF()" class="add-btn">Export Day PDF</button>
+                    </div>
+                    <div class="settings-inline-row" style="margin-top: 10px; flex-wrap: wrap;">
+                        <button id="adminStockAuditPdfBtn" onclick="exportAdminStockAuditPDF()" class="add-btn" style="background: #1f9d80;">Stock Audit PDF</button>
+                        <button id="adminClearDataQuickBtn" onclick="clearAllData()" class="add-btn" style="background: #d93f3f;">Clear Current User Data</button>
+                    </div>
+                </div>
+
+                <div class="settings-card admin-tool-card">
+                    <h3 id="adminAiTitle" class="settings-card-title" style="margin-bottom: 8px;">Mini AI Growth Strategy</h3>
+                    <p id="adminAiDesc" class="settings-help-text" style="margin-bottom: 12px;">AI-style analysis based on your real sales, stock, and credit trends.</p>
+                    <button id="adminRunAiBtn" onclick="runAdminGrowthAnalysis()" class="add-btn" style="margin-bottom: 12px;">Analyze Business</button>
+                    <div id="adminAiInsights" class="admin-ai-insights">
+                        <p id="adminAiPlaceholder" style="margin: 0; color: #6f8ca7;">Run analysis to generate growth strategies.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stock-summary-grid admin-summary-grid">
+                <div class="stock-summary-card">
+                    <h4 id="adminSummaryTotalLabel">Total Accounts</h4>
+                    <h2 id="adminSummaryTotal">0</h2>
+                </div>
+                <div class="stock-summary-card warning">
+                    <h4 id="adminSummaryPrivilegedLabel">Admin + Owner</h4>
+                    <h2 id="adminSummaryPrivileged">0</h2>
+                </div>
+                <div class="stock-summary-card">
+                    <h4 id="adminSummaryStaffLabel">Staff</h4>
+                    <h2 id="adminSummaryStaff">0</h2>
+                </div>
+                <div class="stock-summary-card danger">
+                    <h4 id="adminSummaryInactiveLabel">Inactive</h4>
+                    <h2 id="adminSummaryInactive">0</h2>
+                </div>
+            </div>
+
+            <div class="stock-table-wrap admin-daily-table-wrap">
+                <table id="adminDailySummaryTable">
+                    <thead>
+                        <tr>
+                            <th id="adminDailyHeadDate">Date</th>
+                            <th id="adminDailyHeadTransactions">Transactions</th>
+                            <th id="adminDailyHeadCases">Cases Sold</th>
+                            <th id="adminDailyHeadTotal">Total Sales</th>
+                            <th id="adminDailyHeadProfit">Profit</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminDailySummaryBody">
+                        <tr>
+                            <td id="adminDailyNoDataCell" colspan="5" style="padding: 28px; text-align: center; color: #789;">No sales data yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="customer-controls" style="margin-top: 20px;">
+                <input type="text" id="adminUserSearch" class="search-input" placeholder="Find employers by name, phone, or email..." oninput="renderAdminPanel()">
+                <div class="filter-buttons">
+                    <button id="adminFilterAll" class="filter-btn active" onclick="setAdminUserFilter('all', event)">All</button>
+                    <button id="adminFilterPrivileged" class="filter-btn" onclick="setAdminUserFilter('privileged', event)">Admin/Owner</button>
+                    <button id="adminFilterStaff" class="filter-btn" onclick="setAdminUserFilter('staff', event)">Staff</button>
+                    <button id="adminFilterInactive" class="filter-btn" onclick="setAdminUserFilter('inactive', event)">Inactive</button>
+                </div>
+            </div>
+
+            <div class="stock-table-wrap admin-table-wrap">
+                <h3 id="adminEmployerAccountsTitle" class="settings-card-title" style="padding: 10px 12px 0; border: none; margin: 0;">Employer Accounts</h3>
+                <table id="adminUsersTable">
+                    <thead>
+                        <tr>
+                            <th>Employer</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Provider</th>
+                            <th>Last Login</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminUsersBody">
+                        <tr>
+                            <td colspan="6" style="padding: 30px; text-align: center; color: #789;">No user accounts found yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -1704,7 +2890,7 @@
                 <div class="settings-card settings-card-danger" id="settingsDataCard">
                     <h3 id="settingsDataTitle" class="settings-card-title">Data Management</h3>
                     <div class="settings-danger-actions">
-                        <button onclick="clearAllData()" class="settings-btn settings-btn-danger settings-full-btn">Clear User Data</button>
+                        <button id="clearUserDataBtn" onclick="clearAllData()" class="settings-btn settings-btn-danger settings-full-btn">Clear User Data</button>
                     </div>
                     <p id="clearWarningText" class="settings-warning-note">Warning: clears only the currently logged-in user data.</p>
                 </div>
@@ -1718,9 +2904,30 @@
     </div>
 </div>
 
+<div id="stockAdjustOverlay" class="form-overlay">
+    <div class="form-container" style="max-width: 460px;">
+        <h3 id="stockAdjustTitle" class="form-title">Adjust Stock</h3>
+        <p id="stockAdjustDrinkInfo" style="margin: 0 0 12px; color: #4a6681;"></p>
+        <div class="form-group">
+            <label for="stockAdjustQtyInput">Quantity (Cases)</label>
+            <input type="number" id="stockAdjustQtyInput" min="1" step="1" value="1" placeholder="Enter quantity">
+        </div>
+        <div class="form-group">
+            <label for="stockAdjustNoteInput">Reason (Optional)</label>
+            <input type="text" id="stockAdjustNoteInput" maxlength="120" placeholder="e.g. New delivery, damage, correction">
+        </div>
+        <div class="form-buttons">
+            <button onclick="closeStockAdjustForm()" class="form-btn form-cancel" type="button">Cancel</button>
+            <button id="stockAdjustSubmitBtn" onclick="confirmStockAdjustment()" class="form-btn form-submit" type="button">Save</button>
+        </div>
+    </div>
+</div>
+
 <div id="onboardingOverlay" class="onboarding-overlay" style="display: none;">
     <div class="onboarding-card">
+        <div class="onboarding-glow" aria-hidden="true"></div>
         <div class="onboarding-step"><span id="onboardingStepLabel">Step 1 of 6</span></div>
+        <div class="onboarding-progress"><span id="onboardingProgressBar"></span></div>
         <h3 id="onboardingTitle">Welcome</h3>
         <p id="onboardingText">This quick tutorial will guide you through the app.</p>
         <div class="onboarding-actions">
@@ -1760,4 +2967,5 @@
 </script>
 </body>
 </html>
+
 
