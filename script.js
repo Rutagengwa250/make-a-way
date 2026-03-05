@@ -261,6 +261,9 @@ let cart = []; // Cart items array
 let selectedStockFilter = 'all';
 let pendingStockAdjustContext = null;
 let selectedAdminUserFilter = 'all';
+let selectedAdminGrowthWindowDays = 30;
+let selectedAdminGrowthPointIndex = -1;
+let cachedAdminGrowthAnalysis = null;
 
 // ================= TRANSLATION SYSTEM =================
 let currentLanguage = 'en';
@@ -2378,7 +2381,7 @@ async function restoreActiveSessionFromMeta() {
     if (app) app.style.display = 'block';
 
     showAppBackgroundLetters();
-    showPage(activeLoginMode === 'admin' ? 'adminPanel' : 'home');
+    showPage('home');
     return true;
 }
 
@@ -3357,7 +3360,7 @@ function showWelcomeAnimation() {
         applyTheme(savedTheme);
         updateActiveUserBadge();
 
-        showPage(activeLoginMode === 'admin' ? 'adminPanel' : 'home');
+        showPage('home');
         if (pendingOnboardingStart) {
             setTimeout(() => startOnboardingTutorial(false), 300);
         }
@@ -3706,6 +3709,7 @@ async function loadFromIndexedDB() {
 function refreshAdminAccessUI() {
     const adminSession = isAdminSessionActive();
     const adminPanelAllowed = canAccessAdminPanel();
+    const adminVisiblePages = new Set(['home', 'reports', 'adminHub']);
     if (document.body) {
         document.body.classList.toggle('admin-session', adminSession);
     }
@@ -3713,10 +3717,10 @@ function refreshAdminAccessUI() {
     document.querySelectorAll('.nav-btn[data-page]').forEach((btn) => {
         const page = btn.dataset.page;
         if (adminSession) {
-            btn.style.display = page === 'adminPanel' ? 'inline-flex' : 'none';
+            btn.style.display = adminVisiblePages.has(page) ? 'inline-flex' : 'none';
             return;
         }
-        if (page === 'adminPanel') {
+        if (page === 'adminPanel' || page === 'adminHub') {
             btn.style.display = adminPanelAllowed ? 'inline-flex' : 'none';
             return;
         }
@@ -3726,6 +3730,38 @@ function refreshAdminAccessUI() {
     const topSettingsBtn = document.getElementById('topSettingsBtn');
     if (topSettingsBtn) {
         topSettingsBtn.style.display = adminSession ? 'none' : 'inline-flex';
+    }
+
+    const reportsNavLabel = document.querySelector('.nav-btn[data-page="reports"] .nav-label');
+    if (reportsNavLabel) {
+        reportsNavLabel.textContent = adminSession ? 'Business Analysis' : t('reports');
+    }
+
+    setReportsPageModeForRole();
+}
+
+function setReportsPageModeForRole() {
+    const adminSession = isAdminSessionActive();
+    const reportsHeader = document.querySelector('#reports .page-header h2');
+    const adminBusinessAnalysis = document.getElementById('adminBusinessAnalysis');
+    const reportControls = document.querySelector('#reports .report-controls');
+    const reportRangePanel = document.querySelector('#reports .report-range-panel');
+    const reportOutput = document.getElementById('reportOutput');
+
+    if (reportsHeader) {
+        reportsHeader.textContent = adminSession ? 'Business Analysis' : t('reports');
+    }
+    if (adminBusinessAnalysis) {
+        adminBusinessAnalysis.style.display = adminSession ? 'block' : 'none';
+    }
+    if (reportControls) {
+        reportControls.style.display = adminSession ? 'none' : '';
+    }
+    if (reportRangePanel) {
+        reportRangePanel.style.display = adminSession ? 'none' : '';
+    }
+    if (reportOutput) {
+        reportOutput.style.display = adminSession ? 'none' : '';
     }
 }
 
@@ -3882,6 +3918,677 @@ function getSalesForSpecificDay(dayIso) {
             if (!bDate) return -1;
             return aDate - bDate;
         });
+}
+
+function toLocalDayKey(dateValue) {
+    const dt = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    if (Number.isNaN(dt.getTime())) return '';
+    const year = dt.getFullYear();
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function formatCompactRwf(value) {
+    const amount = Number(value) || 0;
+    const absolute = Math.abs(amount);
+    if (absolute >= 1000000) {
+        return `${(amount / 1000000).toFixed(1)}M`;
+    }
+    if (absolute >= 1000) {
+        return `${(amount / 1000).toFixed(1)}K`;
+    }
+    return String(Math.round(amount));
+}
+
+function formatRwf(value) {
+    return `RWF ${Math.round(Number(value) || 0).toLocaleString()}`;
+}
+
+function formatSignedRwf(value) {
+    const amount = Number(value) || 0;
+    const sign = amount > 0 ? '+' : (amount < 0 ? '-' : '');
+    return `${sign}${formatRwf(Math.abs(amount))}`;
+}
+
+function formatSignedPercent(value, digits = 1) {
+    const amount = Number(value) || 0;
+    const sign = amount > 0 ? '+' : '';
+    return `${sign}${amount.toFixed(digits)}%`;
+}
+
+function getAdminGrowthPointTone(point, previousPoint) {
+    if (!point || Number(point.total) <= 0) {
+        return { key: 'zero', label: 'No sales recorded' };
+    }
+    if (!previousPoint) {
+        return { key: 'flat', label: 'Start of selected period' };
+    }
+    const delta = Number(point.total) - Number(previousPoint.total);
+    if (delta > 0) {
+        return { key: 'up', label: 'Sales improved vs previous day' };
+    }
+    if (delta < 0) {
+        return { key: 'down', label: 'Sales declined vs previous day' };
+    }
+    return { key: 'flat', label: 'Same as previous day' };
+}
+
+function updateAdminGrowthWindowButtons() {
+    const mapping = {
+        14: 'growthWindow14Btn',
+        30: 'growthWindow30Btn',
+        60: 'growthWindow60Btn',
+        90: 'growthWindow90Btn'
+    };
+    Object.entries(mapping).forEach(([dayValue, elementId]) => {
+        const btn = document.getElementById(elementId);
+        if (!btn) return;
+        btn.classList.toggle('active', Number(dayValue) === Number(selectedAdminGrowthWindowDays));
+    });
+}
+
+function getAdminBusinessAnalysisData(days = 30) {
+    const windowDays = Math.max(7, Number(days) || 30);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - (windowDays - 1));
+    const previousStart = new Date(startDate);
+    previousStart.setDate(previousStart.getDate() - windowDays);
+
+    const series = [];
+    const seriesByDay = new Map();
+    for (let i = 0; i < windowDays; i++) {
+        const dayDate = new Date(startDate);
+        dayDate.setDate(startDate.getDate() + i);
+        const dayIso = toLocalDayKey(dayDate);
+        const point = {
+            dayDate,
+            dayIso,
+            label: dayDate.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+            total: 0,
+            transactions: 0,
+            quantity: 0,
+            creditTotal: 0,
+            movingAverage: 0,
+            vsMovingPercent: 0,
+            deltaPercent: 0,
+            delta: 0
+        };
+        series.push(point);
+        seriesByDay.set(dayIso, point);
+    }
+
+    let previousTotal = 0;
+    let previousTransactions = 0;
+    const productTotals = new Map();
+    (Array.isArray(sales) ? sales : []).forEach((sale) => {
+        const saleDate = getSaleDateTimeOrNull(sale);
+        if (!saleDate) return;
+
+        const saleTotal = Number(sale.total) || 0;
+        if (saleDate >= previousStart && saleDate < startDate) {
+            previousTotal += saleTotal;
+            previousTransactions += 1;
+        }
+
+        const dayKey = toLocalDayKey(saleDate);
+        const point = seriesByDay.get(dayKey);
+        if (!point) return;
+
+        point.total += saleTotal;
+        point.transactions += 1;
+        point.quantity += Number(sale.quantity) || 0;
+        if (sale.type === 'credit') {
+            point.creditTotal += saleTotal;
+        }
+
+        const drinkName = String(sale.drinkName || 'Unknown').trim() || 'Unknown';
+        if (!productTotals.has(drinkName)) {
+            productTotals.set(drinkName, { name: drinkName, qty: 0, total: 0 });
+        }
+        const stats = productTotals.get(drinkName);
+        stats.qty += Number(sale.quantity) || 0;
+        stats.total += saleTotal;
+    });
+
+    series.forEach((point, index) => {
+        const previousPoint = index > 0 ? series[index - 1] : null;
+        point.delta = previousPoint ? (point.total - previousPoint.total) : 0;
+        point.deltaPercent = previousPoint && previousPoint.total > 0
+            ? (point.delta / previousPoint.total) * 100
+            : (point.total > 0 ? 100 : 0);
+
+        const movingStart = Math.max(0, index - 6);
+        const movingWindow = series.slice(movingStart, index + 1);
+        const movingTotal = movingWindow.reduce((sum, entry) => sum + (Number(entry.total) || 0), 0);
+        point.movingAverage = movingWindow.length ? (movingTotal / movingWindow.length) : 0;
+        point.vsMovingPercent = point.movingAverage > 0
+            ? ((point.total - point.movingAverage) / point.movingAverage) * 100
+            : (point.total > 0 ? 100 : 0);
+    });
+
+    const currentTotal = series.reduce((sum, point) => sum + point.total, 0);
+    const growthPercent = previousTotal > 0
+        ? ((currentTotal - previousTotal) / previousTotal) * 100
+        : (currentTotal > 0 ? 100 : 0);
+
+    const averageDaily = currentTotal / windowDays;
+    const previousAverageDaily = previousTotal / windowDays;
+    const zeroSalesDays = series.filter((point) => point.total <= 0).length;
+    const activeDays = series.filter((point) => point.total > 0).length;
+    const consistencyPercent = windowDays > 0 ? (activeDays / windowDays) * 100 : 0;
+    const positiveDays = series.filter((point, index) => index > 0 && point.total > series[index - 1].total).length;
+    const negativeDays = series.filter((point, index) => index > 0 && point.total < series[index - 1].total).length;
+    const currentTransactions = series.reduce((sum, point) => sum + (Number(point.transactions) || 0), 0);
+    const currentCreditTotal = series.reduce((sum, point) => sum + (Number(point.creditTotal) || 0), 0);
+    const creditSharePercent = currentTotal > 0 ? (currentCreditTotal / currentTotal) * 100 : 0;
+
+    const topProducts = Array.from(productTotals.values())
+        .sort((a, b) => b.qty - a.qty)
+        .slice(0, 3);
+
+    let declineStreak = 0;
+    for (let i = series.length - 1; i > 0; i--) {
+        if (series[i].total < series[i - 1].total) {
+            declineStreak += 1;
+            continue;
+        }
+        break;
+    }
+
+    const weekdayBuckets = Array.from({ length: 7 }, () => ({ total: 0, days: 0 }));
+    series.forEach((point) => {
+        const weekday = point.dayDate.getDay();
+        weekdayBuckets[weekday].total += point.total;
+        weekdayBuckets[weekday].days += 1;
+    });
+
+    const weekdayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const weekdayAverages = weekdayBuckets
+        .map((entry, index) => ({
+            name: weekdayName[index],
+            average: entry.days > 0 ? (entry.total / entry.days) : 0
+        }))
+        .filter((entry) => Number.isFinite(entry.average));
+    const slowestWeekday = weekdayAverages.slice().sort((a, b) => a.average - b.average)[0] || null;
+
+    const weekendAverage = (() => {
+        const saturday = weekdayBuckets[6];
+        const sunday = weekdayBuckets[0];
+        const days = saturday.days + sunday.days;
+        const total = saturday.total + sunday.total;
+        return days > 0 ? total / days : 0;
+    })();
+    const weekdayAverage = (() => {
+        const weekdays = weekdayBuckets.slice(1, 6);
+        const days = weekdays.reduce((sum, item) => sum + item.days, 0);
+        const total = weekdays.reduce((sum, item) => sum + item.total, 0);
+        return days > 0 ? total / days : 0;
+    })();
+    const weekendLiftPercent = weekdayAverage > 0
+        ? ((weekendAverage - weekdayAverage) / weekdayAverage) * 100
+        : 0;
+
+    const bestDay = series.slice().sort((a, b) => b.total - a.total)[0] || null;
+    const worstDay = series.slice().sort((a, b) => a.total - b.total)[0] || null;
+    const lowStockCount = getLowStockDrinks().length;
+
+    return {
+        windowDays,
+        series,
+        previousTotal,
+        currentTotal,
+        previousAverageDaily,
+        growthPercent,
+        averageDaily,
+        zeroSalesDays,
+        activeDays,
+        consistencyPercent,
+        positiveDays,
+        negativeDays,
+        declineStreak,
+        currentTransactions,
+        previousTransactions,
+        creditSharePercent,
+        topProducts,
+        slowestWeekday,
+        weekendLiftPercent,
+        bestDay,
+        worstDay,
+        lowStockCount
+    };
+}
+
+function renderAdminGrowthPointDetails(analysis) {
+    const details = document.getElementById('adminGrowthPointDetails');
+    if (!details) return;
+
+    const series = Array.isArray(analysis?.series) ? analysis.series : [];
+    if (!series.length) {
+        details.innerHTML = '<div class="admin-growth-point-empty">No daily sales data yet.</div>';
+        return;
+    }
+
+    const selectedIndex = Math.max(0, Math.min(series.length - 1, Number(selectedAdminGrowthPointIndex)));
+    const point = series[selectedIndex];
+    const previousPoint = selectedIndex > 0 ? series[selectedIndex - 1] : null;
+    const tone = getAdminGrowthPointTone(point, previousPoint);
+
+    const toneClass = tone.key === 'up' ? 'positive' : (tone.key === 'down' ? 'negative' : 'flat');
+    const movingToneClass = point.vsMovingPercent > 0.5 ? 'positive' : (point.vsMovingPercent < -0.5 ? 'negative' : 'flat');
+    const deltaNote = previousPoint
+        ? `${formatSignedRwf(point.delta)} (${formatSignedPercent(point.deltaPercent)})`
+        : 'Start of selected period';
+    const movingNote = `${formatSignedPercent(point.vsMovingPercent)} vs 7-day average`;
+    const fullDate = point.dayDate.toLocaleDateString([], {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+
+    details.innerHTML = `
+        <div class="admin-growth-point-head">
+            <div>
+                <h5>${escapeHtml(fullDate)}</h5>
+                <p>${escapeHtml(tone.label)}</p>
+            </div>
+            <span class="admin-growth-point-chip ${toneClass}">${escapeHtml(formatSignedPercent(point.deltaPercent))}</span>
+        </div>
+        <div class="admin-growth-point-grid">
+            <article class="admin-growth-stat-card">
+                <span>Sales</span>
+                <strong>${escapeHtml(formatRwf(point.total))}</strong>
+            </article>
+            <article class="admin-growth-stat-card">
+                <span>Transactions</span>
+                <strong>${Number(point.transactions || 0).toLocaleString()}</strong>
+            </article>
+            <article class="admin-growth-stat-card">
+                <span>Cases Sold</span>
+                <strong>${Number(point.quantity || 0).toLocaleString()}</strong>
+            </article>
+            <article class="admin-growth-stat-card">
+                <span>Credit Sales</span>
+                <strong>${escapeHtml(formatRwf(point.creditTotal || 0))}</strong>
+            </article>
+            <article class="admin-growth-stat-card">
+                <span>7-Day Average</span>
+                <strong>${escapeHtml(formatRwf(point.movingAverage || 0))}</strong>
+            </article>
+            <article class="admin-growth-stat-card">
+                <span>Change vs Previous Day</span>
+                <strong class="${toneClass}">${escapeHtml(deltaNote)}</strong>
+            </article>
+        </div>
+        <div class="admin-growth-point-note ${movingToneClass}">
+            ${escapeHtml(movingNote)}
+        </div>
+    `;
+}
+
+function renderAdminGrowthChart(analysis) {
+    const container = document.getElementById('adminGrowthChart');
+    if (!container) return;
+
+    const series = Array.isArray(analysis?.series) ? analysis.series : [];
+    if (!series.length) {
+        container.innerHTML = '<p style="margin:0; color:#5f7392;">No sales data yet to render growth.</p>';
+        return;
+    }
+
+    const width = Math.max(860, series.length * 26);
+    const height = 346;
+    const padding = { top: 26, right: 16, bottom: 58, left: 66 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    const chartBottom = height - padding.bottom;
+
+    const values = series.flatMap((point) => [Number(point.total) || 0, Number(point.movingAverage) || 0]);
+    const minValueRaw = Math.min(...values, 0);
+    const maxValueRaw = Math.max(...values, 1);
+    const spread = maxValueRaw - minValueRaw;
+    const yPadding = spread > 0 ? spread * 0.14 : 1;
+    const yMin = Math.max(0, minValueRaw - yPadding * 0.25);
+    const yMax = maxValueRaw + yPadding;
+    const ySpan = Math.max(1, yMax - yMin);
+    const toY = (value) => padding.top + ((yMax - value) / ySpan) * chartHeight;
+
+    const stepX = chartWidth / series.length;
+    const barWidth = Math.max(6, Math.min(26, stepX * 0.72));
+    const points = series.map((point, index) => {
+        const x = padding.left + (stepX * index) + ((stepX - barWidth) / 2);
+        const y = toY(Number(point.total) || 0);
+        const movingY = toY(Number(point.movingAverage) || 0);
+        const heightValue = Math.max(1, chartBottom - y);
+        return {
+            ...point,
+            x,
+            y,
+            movingY,
+            centerX: x + (barWidth / 2),
+            barWidth,
+            barHeight: heightValue
+        };
+    });
+
+    const tickCount = 4;
+    const yTicks = Array.from({ length: tickCount + 1 }, (_, index) => {
+        const ratio = index / tickCount;
+        const value = yMax - (ratio * ySpan);
+        const y = padding.top + (ratio * chartHeight);
+        return { value, y };
+    });
+
+    const selectedIndex = Math.max(0, Math.min(points.length - 1, Number(selectedAdminGrowthPointIndex)));
+    const selectedPoint = points[selectedIndex] || points[points.length - 1];
+
+    const movingAveragePath = points
+        .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.centerX.toFixed(2)} ${point.movingY.toFixed(2)}`)
+        .join(' ');
+
+    const barRects = points.map((point, index) => {
+        const previous = index > 0 ? points[index - 1] : null;
+        const tone = getAdminGrowthPointTone(point, previous).key;
+        const toneClass = tone === 'up' ? 'up' : (tone === 'down' ? 'down' : (tone === 'zero' ? 'zero' : 'flat'));
+        const activeClass = index === selectedIndex ? ' active' : '';
+        const title = `${point.label}: ${formatRwf(point.total)} | ${point.transactions} tx | ${point.quantity} cases`;
+        return `
+            <rect
+                class="growth-bar growth-bar-${toneClass}${activeClass}"
+                x="${point.x.toFixed(2)}"
+                y="${point.y.toFixed(2)}"
+                width="${point.barWidth.toFixed(2)}"
+                height="${point.barHeight.toFixed(2)}"
+                rx="3"
+                ry="3"
+                data-point-index="${index}"
+                tabindex="0"
+            >
+                <title>${escapeHtml(title)}</title>
+            </rect>
+        `;
+    }).join('');
+
+    const movingAveragePoints = points.map((point, index) => `
+        <circle
+            class="growth-moving-point${index === selectedIndex ? ' active' : ''}"
+            cx="${point.centerX.toFixed(2)}"
+            cy="${point.movingY.toFixed(2)}"
+            r="${index === selectedIndex ? '4.2' : '3'}"
+        ></circle>
+    `).join('');
+
+    const labelStep = Math.max(1, Math.ceil(points.length / 8));
+    const xLabels = points
+        .filter((_, index) => index % labelStep === 0 || index === points.length - 1)
+        .map((point) => `<text class="growth-x-label" x="${point.centerX.toFixed(2)}" y="${(height - 14).toFixed(2)}" text-anchor="middle">${escapeHtml(point.label)}</text>`)
+        .join('');
+
+    container.innerHTML = `
+        <div class="admin-growth-legend">
+            <span><i class="legend-dot up"></i>Up vs previous day</span>
+            <span><i class="legend-dot down"></i>Down vs previous day</span>
+            <span><i class="legend-dot avg"></i>7-day moving average</span>
+        </div>
+        <svg viewBox="0 0 ${width} ${height}" class="admin-growth-svg" role="img" aria-label="Business growth chart">
+            ${yTicks.map((tick) => `
+                <line class="growth-grid-line" x1="${padding.left}" y1="${tick.y.toFixed(2)}" x2="${(width - padding.right).toFixed(2)}" y2="${tick.y.toFixed(2)}"></line>
+                <text class="growth-y-label" x="${(padding.left - 8).toFixed(2)}" y="${(tick.y + 4).toFixed(2)}" text-anchor="end">RWF ${formatCompactRwf(tick.value)}</text>
+            `).join('')}
+            <line class="growth-axis-line" x1="${padding.left}" y1="${chartBottom.toFixed(2)}" x2="${(width - padding.right).toFixed(2)}" y2="${chartBottom.toFixed(2)}"></line>
+            ${barRects}
+            <line class="growth-selected-line" x1="${selectedPoint.centerX.toFixed(2)}" y1="${padding.top}" x2="${selectedPoint.centerX.toFixed(2)}" y2="${chartBottom.toFixed(2)}"></line>
+            <path class="growth-moving-average-line" d="${movingAveragePath}"></path>
+            ${movingAveragePoints}
+            ${xLabels}
+        </svg>
+    `;
+
+    container.querySelectorAll('.growth-bar[data-point-index]').forEach((bar) => {
+        const selectPoint = () => {
+            const idx = Number(bar.getAttribute('data-point-index'));
+            if (!Number.isFinite(idx)) return;
+            selectAdminGrowthPoint(idx);
+        };
+        bar.addEventListener('click', selectPoint);
+        bar.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                selectPoint();
+            }
+        });
+    });
+}
+
+function setAdminGrowthWindow(days) {
+    if (!canAccessAdminPanel()) {
+        return 'Permission Denied';
+    }
+    const allowed = new Set([14, 30, 60, 90]);
+    const parsed = Number(days);
+    selectedAdminGrowthWindowDays = allowed.has(parsed) ? parsed : 30;
+    selectedAdminGrowthPointIndex = -1;
+    renderAdminBusinessAnalysisTab();
+    return selectedAdminGrowthWindowDays;
+}
+
+function selectAdminGrowthPoint(index) {
+    if (!canAccessAdminPanel()) {
+        return 'Permission Denied';
+    }
+    const analysis = cachedAdminGrowthAnalysis;
+    const series = Array.isArray(analysis?.series) ? analysis.series : [];
+    if (!series.length) {
+        return renderAdminBusinessAnalysisTab();
+    }
+    selectedAdminGrowthPointIndex = Math.max(0, Math.min(series.length - 1, Number(index) || 0));
+    renderAdminGrowthChart(analysis);
+    renderAdminGrowthPointDetails(analysis);
+    return selectedAdminGrowthPointIndex;
+}
+
+function renderAdminBusinessAnalysisTab() {
+    if (!canAccessAdminPanel()) {
+        return 'Permission Denied';
+    }
+
+    setReportsPageModeForRole();
+    const analysis = getAdminBusinessAnalysisData(selectedAdminGrowthWindowDays);
+    cachedAdminGrowthAnalysis = analysis;
+
+    if (!Array.isArray(analysis.series) || analysis.series.length === 0) {
+        selectedAdminGrowthPointIndex = -1;
+    } else if (selectedAdminGrowthPointIndex < 0 || selectedAdminGrowthPointIndex >= analysis.series.length) {
+        const lastNonZeroIndex = [...analysis.series]
+            .map((point, idx) => ({ idx, total: point.total }))
+            .reverse()
+            .find((entry) => Number(entry.total) > 0);
+        selectedAdminGrowthPointIndex = lastNonZeroIndex ? lastNonZeroIndex.idx : (analysis.series.length - 1);
+    }
+
+    const growthBadge = document.getElementById('adminGrowthTrendBadge');
+    const growthSummary = document.getElementById('adminGrowthSummary');
+    updateAdminGrowthWindowButtons();
+
+    if (growthBadge) {
+        const growth = Number(analysis.growthPercent) || 0;
+        growthBadge.textContent = `${formatSignedPercent(growth)} vs previous ${analysis.windowDays} days`;
+        growthBadge.classList.remove('positive', 'negative', 'flat');
+        if (growth > 0.1) {
+            growthBadge.classList.add('positive');
+        } else if (growth < -0.1) {
+            growthBadge.classList.add('negative');
+        } else {
+            growthBadge.classList.add('flat');
+        }
+    }
+
+    if (growthSummary) {
+        const bestDayText = analysis.bestDay ? `${analysis.bestDay.label} (${formatRwf(analysis.bestDay.total)})` : 'N/A';
+        const activeText = `${analysis.activeDays}/${analysis.windowDays} active days`;
+        growthSummary.textContent = `${analysis.windowDays}-day sales: ${formatRwf(analysis.currentTotal)} (avg ${formatRwf(analysis.averageDaily)}/day). ${activeText}. Best day: ${bestDayText}.`;
+    }
+
+    renderAdminGrowthChart(analysis);
+    renderAdminGrowthPointDetails(analysis);
+    return analysis;
+}
+
+function getBusinessAiAdvisorSuggestions(analysis) {
+    const suggestions = [];
+    const growth = Number(analysis?.growthPercent) || 0;
+    const topProducts = Array.isArray(analysis?.topProducts) ? analysis.topProducts : [];
+    const growthTone = growth > 1 ? 'positive' : (growth < -1 ? 'negative' : 'neutral');
+    const growthHeadline = growth >= 0
+        ? `Revenue is trending up. Keep pressure on high-converting days.`
+        : `Revenue is trending down. Trigger a short recovery campaign this week.`;
+    suggestions.push({
+        title: 'Revenue Momentum',
+        metric: formatSignedPercent(growth),
+        tone: growthTone,
+        detail: `${growthHeadline} Period total is ${formatRwf(analysis.currentTotal)} over ${analysis.windowDays} days.`
+    });
+
+    const consistencyTone = analysis.consistencyPercent >= 70 ? 'positive' : (analysis.consistencyPercent >= 45 ? 'warning' : 'negative');
+    suggestions.push({
+        title: 'Sales Consistency',
+        metric: `${analysis.activeDays}/${analysis.windowDays} days`,
+        tone: consistencyTone,
+        detail: `You had sales activity on ${analysis.consistencyPercent.toFixed(0)}% of days. Focus outreach on zero-sales days.`
+    });
+
+    const creditShare = Number(analysis.creditSharePercent) || 0;
+    const creditTone = creditShare > 35 ? 'warning' : 'positive';
+    suggestions.push({
+        title: 'Credit Exposure',
+        metric: `${creditShare.toFixed(1)}%`,
+        tone: creditTone,
+        detail: creditShare > 35
+            ? 'Credit share is high. Encourage same-day payment incentives for risky accounts.'
+            : 'Credit share is healthy. Continue balancing credit and cash sales.'
+    });
+
+    if (topProducts.length > 0) {
+        const bestSeller = topProducts[0];
+        suggestions.push({
+            title: 'Best Seller Focus',
+            metric: `${bestSeller.qty} cases`,
+            tone: 'positive',
+            detail: `${bestSeller.name} leads volume. Keep buffer stock and bundle it with slower drinks.`
+        });
+    }
+
+    if (analysis && Number.isFinite(analysis.weekendLiftPercent)) {
+        const weekendTone = analysis.weekendLiftPercent > 4 ? 'positive' : 'neutral';
+        suggestions.push({
+            title: 'Weekend Pattern',
+            metric: formatSignedPercent(analysis.weekendLiftPercent),
+            tone: weekendTone,
+            detail: analysis.weekendLiftPercent > 4
+                ? 'Weekends are stronger than weekdays. Increase Friday stock and staffing.'
+                : 'Weekend effect is weak. Run targeted weekend promotions to lift demand.'
+        });
+    }
+
+    if (analysis?.slowestWeekday?.name) {
+        suggestions.push({
+            title: 'Slow Day Recovery',
+            metric: analysis.slowestWeekday.name,
+            tone: 'warning',
+            detail: `Use ${analysis.slowestWeekday.name} for combo offers, call-backs, and debt follow-ups to recover volume.`
+        });
+    }
+
+    if ((analysis?.lowStockCount || 0) > 0) {
+        suggestions.push({
+            title: 'Stock Pressure',
+            metric: `${analysis.lowStockCount} low`,
+            tone: 'warning',
+            detail: 'Low-stock items can break momentum. Prioritize restock before next peak day.'
+        });
+    }
+
+    return suggestions.slice(0, 7);
+}
+
+async function runBusinessAiAdvisor(silent = false) {
+    const output = document.getElementById('businessAiAdvisorOutput');
+    const trigger = document.getElementById('runBusinessAiAdvisorBtn');
+
+    if (!canAccessAdminPanel()) {
+        if (output) {
+            output.innerHTML = '<p style="margin: 0; color: #c64545;">Permission Denied</p>';
+        }
+        if (!silent) {
+            alert('Permission Denied');
+        }
+        return 'Permission Denied';
+    }
+
+    const refreshedAnalysis = renderAdminBusinessAnalysisTab();
+    const analysis = (refreshedAnalysis && typeof refreshedAnalysis === 'object')
+        ? refreshedAnalysis
+        : (cachedAdminGrowthAnalysis || getAdminBusinessAnalysisData(selectedAdminGrowthWindowDays));
+    if (!analysis || typeof analysis !== 'object') {
+        return 'Permission Denied';
+    }
+
+    if (output) {
+        output.classList.add('is-generating');
+        output.innerHTML = `
+            <div class="advisor-loading">
+                <div class="advisor-loading-line w50"></div>
+                <div class="advisor-loading-line w85"></div>
+                <div class="advisor-loading-line w70"></div>
+                <div class="advisor-loading-line w92"></div>
+            </div>
+        `;
+    }
+    if (trigger) {
+        trigger.disabled = true;
+        trigger.classList.add('is-generating');
+        trigger.dataset.defaultLabel = trigger.dataset.defaultLabel || trigger.textContent || 'Generate Suggestions';
+        trigger.textContent = 'Generating...';
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 760));
+
+    const suggestions = getBusinessAiAdvisorSuggestions(analysis);
+    if (output) {
+        const generatedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        output.innerHTML = `
+            <div class="advisor-meta-row">
+                <span class="advisor-meta-pill">Updated ${escapeHtml(generatedAt)}</span>
+                <span class="advisor-meta-pill neutral">${analysis.windowDays}-day model</span>
+            </div>
+            <div class="advisor-insight-grid">
+                ${suggestions.map((item) => `
+                    <article class="advisor-insight-card ${escapeHtml(item.tone || 'neutral')}">
+                        <div class="advisor-insight-head">
+                            <h5>${escapeHtml(item.title || 'Suggestion')}</h5>
+                            <span class="advisor-insight-metric">${escapeHtml(String(item.metric || ''))}</span>
+                        </div>
+                        <p>${escapeHtml(item.detail || '')}</p>
+                    </article>
+                `).join('')}
+            </div>
+        `;
+        output.classList.remove('is-generating');
+    }
+    if (trigger) {
+        trigger.disabled = false;
+        trigger.classList.remove('is-generating');
+        trigger.textContent = trigger.dataset.defaultLabel || 'Generate Suggestions';
+    }
+
+    if (!silent) {
+        showSuccessToast('Business advisor updated.');
+    }
+    return suggestions;
 }
 
 function getAdminGrowthInsights() {
@@ -4466,14 +5173,27 @@ function exportAdminUsersPDF() {
 function showPage(pageName) {
     refreshAdminAccessUI();
     const adminSession = isAdminSessionActive();
+    const adminVisiblePages = new Set(['home', 'reports', 'adminHub']);
+    let requestedPage = pageName;
+    let targetPage = pageName;
 
-    if (adminSession && pageName !== 'adminPanel') {
-        pageName = 'adminPanel';
+    if (adminSession) {
+        if (!adminVisiblePages.has(requestedPage)) {
+            requestedPage = 'home';
+        }
+        targetPage = requestedPage === 'adminHub' ? 'adminPanel' : requestedPage;
+    } else {
+        if (requestedPage === 'adminHub') {
+            alert('Only admin/owner accounts can open Management.');
+            requestedPage = 'home';
+            targetPage = 'home';
+        }
     }
 
-    if (pageName === 'adminPanel' && !canAccessAdminPanel()) {
+    if (targetPage === 'adminPanel' && !canAccessAdminPanel()) {
         alert('Only admin/owner accounts can open Admin Panel.');
-        pageName = 'home';
+        requestedPage = 'home';
+        targetPage = 'home';
     }
 
     // Hide all pages
@@ -4482,14 +5202,14 @@ function showPage(pageName) {
     });
     
     // Show selected page
-    const page = document.getElementById(pageName);
+    const page = document.getElementById(targetPage);
     if (page) {
         page.style.display = 'block';
     }
     
     // Update nav buttons
     document.querySelectorAll('.nav-btn').forEach(btn => {
-        const isActive = btn.dataset.page === pageName;
+        const isActive = btn.dataset.page === requestedPage;
         btn.classList.toggle('active', isActive);
         if (isActive) {
             btn.setAttribute('aria-current', 'page');
@@ -4499,13 +5219,13 @@ function showPage(pageName) {
     });
     const topSettingsBtn = document.getElementById('topSettingsBtn');
     if (topSettingsBtn) {
-        const isSettingsPage = pageName === 'settings';
+        const isSettingsPage = requestedPage === 'settings';
         topSettingsBtn.classList.toggle('active', isSettingsPage);
         topSettingsBtn.setAttribute('aria-pressed', isSettingsPage ? 'true' : 'false');
     }
     
     // Load page-specific data
-    switch(pageName) {
+    switch(targetPage) {
         case 'home':
             updateHome();
             break;
@@ -4531,10 +5251,14 @@ function showPage(pageName) {
             displaySalesHistory();
             break;
         case 'reports':
-            showDailyReport();
-            addExportImportButtons();
-            if (!document.getElementById('rangeStartDate')?.value || !document.getElementById('rangeEndDate')?.value) {
-                setRangeToThisMonth();
+            if (adminSession) {
+                renderAdminBusinessAnalysisTab();
+            } else {
+                showDailyReport();
+                addExportImportButtons();
+                if (!document.getElementById('rangeStartDate')?.value || !document.getElementById('rangeEndDate')?.value) {
+                    setRangeToThisMonth();
+                }
             }
             break;
         case 'settings':
@@ -9126,6 +9850,7 @@ function updateLanguageUI() {
             btn.textContent = t(key);
         }
     });
+    setText('#adminHubBtn .nav-label', 'Management');
     const topSettingsBtn = document.getElementById('topSettingsBtn');
     if (topSettingsBtn) {
         topSettingsBtn.title = t('settings');
@@ -9581,11 +10306,9 @@ window.viewUserDataSnapshot = viewUserDataSnapshot;
 window.exportAdminUsersPDF = exportAdminUsersPDF;
 window.exportAdminUsersJSON = exportAdminUsersJSON;
 window.runAdminGrowthAnalysis = runAdminGrowthAnalysis;
+window.runBusinessAiAdvisor = runBusinessAiAdvisor;
+window.renderAdminBusinessAnalysisTab = renderAdminBusinessAnalysisTab;
+window.setAdminGrowthWindow = setAdminGrowthWindow;
+window.selectAdminGrowthPoint = selectAdminGrowthPoint;
 window.exportAdminDailySalesPDF = exportAdminDailySalesPDF;
 window.exportAdminStockAuditPDF = exportAdminStockAuditPDF;
-
-
-
-
-
-
