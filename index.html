@@ -2384,8 +2384,8 @@
             <button class="nav-btn" data-page="reports" onclick="showPage('reports')">
                 <span class="nav-label">Reports</span>
             </button>
-            <button id="adminNavBtn" class="nav-btn nav-btn-emphasis" data-page="adminPanel" onclick="showPage('adminPanel')" style="display: none;">
-                <span class="nav-label">Admin Panel</span>
+            <button id="adminHubBtn" class="nav-btn" data-page="adminHub" onclick="showPage('adminHub')" style="display: none;">
+                <span class="nav-label">Management</span>
             </button>
         </div>
         <div class="nav-group nav-group-meta">
@@ -2777,6 +2777,40 @@
             <div class="page-header">
                 <h2>Reports</h2>
             </div>
+
+            <div id="adminBusinessAnalysis" class="admin-business-analysis" style="display: none;">
+                <div class="admin-growth-header">
+                    <h3>Business Growth Overview</h3>
+                    <div id="adminGrowthTrendBadge" class="admin-growth-badge">No trend yet</div>
+                </div>
+                <div id="adminGrowthSummary" class="admin-growth-summary">Analyze growth from your recent daily sales.</div>
+                <div class="admin-growth-toolbar" role="group" aria-label="Growth analysis period">
+                    <button id="growthWindow14Btn" class="growth-window-btn" type="button" onclick="setAdminGrowthWindow(14)">14 Days</button>
+                    <button id="growthWindow30Btn" class="growth-window-btn active" type="button" onclick="setAdminGrowthWindow(30)">30 Days</button>
+                    <button id="growthWindow60Btn" class="growth-window-btn" type="button" onclick="setAdminGrowthWindow(60)">60 Days</button>
+                    <button id="growthWindow90Btn" class="growth-window-btn" type="button" onclick="setAdminGrowthWindow(90)">90 Days</button>
+                </div>
+                <div id="adminGrowthChart" class="admin-growth-chart"></div>
+                <div id="adminGrowthPointDetails" class="admin-growth-point-details">
+                    <div class="admin-growth-point-empty">Click a bar to view day details.</div>
+                </div>
+
+                <div class="admin-ai-advisor-card">
+                    <div class="admin-ai-advisor-head">
+                        <div class="admin-ai-advisor-title">
+                            <h4>AI Business Advisor</h4>
+                            <p>Action-focused suggestions from your real sales data.</p>
+                        </div>
+                        <button id="runBusinessAiAdvisorBtn" class="add-btn" onclick="runBusinessAiAdvisor()">Generate Suggestions</button>
+                    </div>
+                    <div id="businessAiAdvisorOutput" class="admin-ai-advisor-output">
+                        <div class="advisor-empty-state">
+                            <strong>Suggestions are ready</strong>
+                            <p>Generate ideas to see growth, stock, and sales actions.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
             
             <div class="report-controls">
                 <button class="report-btn" onclick="showDailyReport()">Daily</button>
@@ -2967,5 +3001,3 @@
 </script>
 </body>
 </html>
-
-
