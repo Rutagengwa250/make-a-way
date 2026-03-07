@@ -88,6 +88,44 @@ function applyPdfBrandHeader(doc, reportTitle = '') {
     return headerHeight + 8;
 }
 
+function applyPdfBrandHeaderFirstPageOnly(doc, reportTitle = '') {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const headerHeight = 24;
+    const sidePadding = 12;
+    const title = String(reportTitle || '').trim();
+    const primary = [21, 109, 214];
+    const secondary = [12, 72, 161];
+
+    doc.setFillColor(...secondary);
+    doc.rect(0, 0, pageWidth, headerHeight, 'F');
+    doc.setFillColor(...primary);
+    doc.rect(0, headerHeight - 5, pageWidth, 5, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255);
+    doc.text('MAKE A WAY', sidePadding, 10);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Business Tracking & Sales Reporting', sidePadding, 16);
+
+    if (title) {
+        const badgeWidth = Math.min(96, Math.max(48, title.length * 2.8));
+        const badgeX = pageWidth - sidePadding - badgeWidth;
+        doc.setFillColor(255, 255, 255);
+        doc.roundedRect(badgeX, 5, badgeWidth, 10, 2, 2, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.8);
+        doc.setTextColor(...secondary);
+        doc.text(title.toUpperCase().slice(0, 32), badgeX + badgeWidth / 2, 11.5, { align: 'center' });
+    }
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    return headerHeight + 8;
+}
+
 function applyPdfBrandFooter(doc, reportTitle = '') {
     const totalPages = doc.internal.getNumberOfPages();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -258,6 +296,8 @@ const RWANDA_TIME_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
 // ================= CART SYSTEM =================
 let cart = []; // Cart items array
+let drinkSelectionModeEnabled = false;
+let selectedDrinksDraft = {};
 let selectedStockFilter = 'all';
 let pendingStockAdjustContext = null;
 let selectedAdminUserFilter = 'all';
@@ -267,6 +307,13 @@ let activeAdminSalesSubTab = 'daily';
 let selectedAdminGrowthWindowDays = 30;
 let selectedAdminGrowthPointIndex = -1;
 let cachedAdminGrowthAnalysis = null;
+const ADMIN_DRINKS_PIE_COLORS = ['#1565c0', '#2e7d32', '#c62828', '#f9a825', '#6a1b9a', '#00838f', '#ef6c00', '#37474f', '#7b1fa2', '#00695c'];
+const adminDrinksPieState = {
+    data: [],
+    slices: [],
+    hoverIndex: -1,
+    pinnedIndex: -1
+};
 
 // ================= TRANSLATION SYSTEM =================
 let currentLanguage = 'en';
@@ -293,7 +340,6 @@ const translations = {
         adminSubTabDailySales: 'Daily Sales',
         adminSubTabStock: 'Stock',
         adminExportAccountsPdf: 'Export Accounts PDF',
-        adminExportAccountsJson: 'Export Accounts JSON',
         adminSearchEmployersPlaceholder: 'Find employers by name, phone, or email...',
         adminFilterPrivileged: 'Admin/Owner',
         adminFilterStaff: 'Staff',
@@ -301,6 +347,7 @@ const translations = {
         adminDailyExportTitle: 'Daily Sales Export',
         adminDailyExportDesc: 'Select a specific day and export all sales in ordered time.',
         adminExportDayPdf: 'Export Day PDF',
+        adminExportAllSalesPdf: 'Export All Sales PDF',
         adminStockAuditPdf: 'Stock Audit PDF',
         adminStockSectionTitle: 'Stock Overview',
         adminStockSectionDesc: 'Track stock exactly like the user stock page and print reports.',
@@ -311,7 +358,7 @@ const translations = {
         adminStockFilterOut: 'Out',
         adminClearCurrentUserData: 'Clear Current User Data',
         adminAccountsExportTitle: 'Account Exports',
-        adminAccountsExportDesc: 'Download employer/account data in PDF or JSON.',
+        adminAccountsExportDesc: 'Download employer/account data in PDF.',
         adminDataProtectionTitle: 'Data Protection',
         adminDataProtectionDesc: 'Only admin login can clear current user data.',
         adminAiTitle: 'Mini AI Growth Strategy',
@@ -327,6 +374,7 @@ const translations = {
         adminDailyHeadCases: 'Cases Sold',
         adminDailyHeadTotal: 'Total Sales',
         adminDailyHeadProfit: 'Profit',
+        adminDailyHeadPrint: 'Print',
         adminEmployerAccountsTitle: 'Employer Accounts',
         adminNoSalesDataYet: 'No sales data yet.',
         adminNoStockMatch: 'No drinks match this filter.',
@@ -1103,7 +1151,7 @@ function getDefaultUserSettings() {
         theme: 'light',
         language: 'en',
         currency: 'RWF',
-        onboardingDone: false
+        onboardingDone: true
     };
 }
 
@@ -2097,12 +2145,7 @@ async function completeLoginForUser(user, options = {}) {
     appMeta.activeSessionUserId = getAuthSessionUserId(user);
     appMeta.activeSessionLoginMode = activeLoginMode;
     await loadActiveUserData(user);
-    pendingOnboardingStart = activeLoginMode !== 'admin' &&
-        !settings.onboardingDone &&
-        sales.length === 0 &&
-        customers.length === 0 &&
-        clates.length === 0 &&
-        drinks.length === 0;
+    pendingOnboardingStart = false;
     await optimizedSaveData();
     updateActiveUserBadge();
     refreshAdminAccessUI();
@@ -2624,19 +2667,11 @@ function bindOnboardingControls() {
 }
 
 function startOnboardingTutorial(force = false) {
-    if (!activeUser) {
-        alert('Please login first.');
-        return;
-    }
-    if (!force && settings.onboardingDone) return;
-
+    void force;
+    pendingOnboardingStart = false;
+    onboardingVisible = false;
     const overlay = document.getElementById('onboardingOverlay');
-    if (!overlay) return;
-    onboardingStepIndex = 0;
-    onboardingVisible = true;
-    overlay.style.display = 'flex';
-    bindOnboardingControls();
-    renderOnboardingStep();
+    if (overlay) overlay.style.display = 'none';
 }
 
 async function handleLogin() {
@@ -3384,9 +3419,6 @@ function showWelcomeAnimation() {
         updateActiveUserBadge();
 
         showPage('home');
-        if (pendingOnboardingStart) {
-            setTimeout(() => startOnboardingTutorial(false), 300);
-        }
     };
 
     if (!overlay) {
@@ -3600,7 +3632,7 @@ function startRwandaClock() {
 
 function configureDatePickers() {
     const todayIso = getTodayISODate();
-    const pickerIds = ['salesHistoryDate', 'dailyReportDate', 'rangeStartDate', 'rangeEndDate'];
+    const pickerIds = ['salesHistoryDate', 'dailyReportDate', 'rangeStartDate', 'rangeEndDate', 'adminSalesExportDate'];
 
     pickerIds.forEach((id) => {
         const input = document.getElementById(id);
@@ -3732,7 +3764,7 @@ async function loadFromIndexedDB() {
 function refreshAdminAccessUI() {
     const adminSession = isAdminSessionActive();
     const adminPanelAllowed = canAccessAdminPanel();
-    const adminVisiblePages = new Set(['home', 'reports', 'adminHub']);
+    const adminVisiblePages = new Set(['home', 'reports', 'adminSales', 'adminAccounts', 'adminHub', 'settings']);
     if (document.body) {
         document.body.classList.toggle('admin-session', adminSession);
     }
@@ -3743,8 +3775,16 @@ function refreshAdminAccessUI() {
             btn.style.display = adminVisiblePages.has(page) ? 'inline-flex' : 'none';
             return;
         }
-        if (page === 'adminPanel' || page === 'adminHub') {
+        if (page === 'adminPanel' || page === 'adminHub' || page === 'adminSales' || page === 'adminAccounts') {
             btn.style.display = adminPanelAllowed ? 'inline-flex' : 'none';
+            return;
+        }
+        if (page === 'settings') {
+            btn.style.display = 'none';
+            return;
+        }
+        if (page === 'reports') {
+            btn.style.display = 'none';
             return;
         }
         btn.style.display = 'inline-flex';
@@ -3972,7 +4012,7 @@ function renderAdminDailySalesSummary() {
 
     const rows = getDailySalesRowsOrdered();
     if (!rows.length) {
-        body.innerHTML = `<tr><td id="adminDailyNoDataCell" colspan="5" style="padding: 28px; text-align: center; color: #789;">${escapeHtml(t('adminNoSalesDataYet'))}</td></tr>`;
+        body.innerHTML = `<tr><td id="adminDailyNoDataCell" colspan="6" style="padding: 28px; text-align: center; color: #789;">${escapeHtml(t('adminNoSalesDataYet'))}</td></tr>`;
         return;
     }
 
@@ -3984,6 +4024,9 @@ function renderAdminDailySalesSummary() {
                 <td>${Number(row.cases).toLocaleString()}</td>
                 <td>RWF ${Number(row.total).toLocaleString()}</td>
                 <td>RWF ${Number(row.profit).toLocaleString()}</td>
+                <td>
+                    <button type="button" class="add-btn" style="padding: 6px 10px; font-size: 12px;" onclick="exportAdminDailySalesPDF('${String(row.dayIso).replace(/'/g, "\\'")}')">PDF</button>
+                </td>
             </tr>
         `)
         .join('');
@@ -4595,7 +4638,261 @@ function renderAdminBusinessAnalysisTab() {
 
     renderAdminGrowthChart(analysis);
     renderAdminGrowthPointDetails(analysis);
+    const pieContainer = document.getElementById('adminDrinksPieContainer');
+    if (pieContainer && pieContainer.style.display !== 'none') {
+        renderAdminDrinksPieChart();
+    }
     return analysis;
+}
+
+function getAdminDrinksPieData() {
+    const byDrink = new Map();
+    (Array.isArray(sales) ? sales : []).forEach((sale) => {
+        const name = String(sale.drinkName || 'Unknown').trim() || 'Unknown';
+        const qty = Number(sale.quantity) || 0;
+        if (qty <= 0) return;
+        byDrink.set(name, (byDrink.get(name) || 0) + qty);
+    });
+    const total = Array.from(byDrink.values()).reduce((s, n) => s + n, 0);
+    return Array.from(byDrink.entries())
+        .map(([name, qty]) => ({ name, qty, share: total > 0 ? (qty / total) * 100 : 0 }))
+        .sort((a, b) => b.qty - a.qty);
+}
+
+function getAdminDrinksPieFocusIndex() {
+    if (adminDrinksPieState.pinnedIndex >= 0 && adminDrinksPieState.pinnedIndex < adminDrinksPieState.data.length) {
+        return adminDrinksPieState.pinnedIndex;
+    }
+    if (adminDrinksPieState.hoverIndex >= 0 && adminDrinksPieState.hoverIndex < adminDrinksPieState.data.length) {
+        return adminDrinksPieState.hoverIndex;
+    }
+    return -1;
+}
+
+function hideAdminDrinksPieTooltip() {
+    const tooltip = document.getElementById('adminDrinksPieTooltip');
+    if (tooltip) tooltip.style.display = 'none';
+}
+
+function showAdminDrinksPieTooltip(item, clientX, clientY) {
+    const tooltip = document.getElementById('adminDrinksPieTooltip');
+    const wrap = document.querySelector('#adminDrinksPieContainer .admin-drinks-pie-wrap');
+    if (!tooltip || !wrap || !item) return;
+
+    tooltip.textContent = `${item.name}: ${item.qty.toLocaleString()} cases (${item.share.toFixed(1)}%)`;
+    tooltip.style.display = 'block';
+    tooltip.style.left = '0px';
+    tooltip.style.top = '0px';
+
+    const wrapRect = wrap.getBoundingClientRect();
+    const maxLeft = Math.max(8, wrap.clientWidth - tooltip.offsetWidth - 8);
+    const maxTop = Math.max(8, wrap.clientHeight - tooltip.offsetHeight - 8);
+    const left = Math.min(maxLeft, Math.max(8, clientX - wrapRect.left + 12));
+    const top = Math.min(maxTop, Math.max(8, clientY - wrapRect.top + 12));
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+}
+
+function getAdminDrinksPieHitIndex(x, y) {
+    const slices = Array.isArray(adminDrinksPieState.slices) ? adminDrinksPieState.slices : [];
+    for (let i = 0; i < slices.length; i += 1) {
+        const slice = slices[i];
+        if (!slice) continue;
+        const dx = x - slice.cx;
+        const dy = y - slice.cy;
+        const distance = Math.sqrt((dx * dx) + (dy * dy));
+        if (distance > slice.radius) continue;
+
+        let angle = Math.atan2(dy, dx);
+        if (angle < -Math.PI / 2) angle += Math.PI * 2;
+        if (angle >= slice.startAngle && angle <= slice.endAngle) return i;
+    }
+    return -1;
+}
+
+function drawAdminDrinksPieChart() {
+    const canvas = document.getElementById('adminDrinksPieCanvas');
+    const legendEl = document.getElementById('adminDrinksPieLegend');
+    if (!canvas || !legendEl) return;
+
+    const ctx = canvas.getContext('2d');
+    const data = adminDrinksPieState.data;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    adminDrinksPieState.slices = [];
+
+    if (!data.length) {
+        legendEl.innerHTML = '<p style="margin:0;color:#789;">No sales data yet.</p>';
+        canvas.style.cursor = 'default';
+        hideAdminDrinksPieTooltip();
+        return;
+    }
+
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const baseRadius = Math.min(cx, cy) - 12;
+    const focusIndex = getAdminDrinksPieFocusIndex();
+    const pinnedIndex = adminDrinksPieState.pinnedIndex;
+    let startAngle = -Math.PI / 2;
+
+    data.forEach((item, i) => {
+        const sliceAngle = (item.share / 100) * 2 * Math.PI;
+        const endAngle = startAngle + sliceAngle;
+        const midAngle = startAngle + (sliceAngle / 2);
+        const isFocused = focusIndex === i;
+        const isMuted = pinnedIndex >= 0 && pinnedIndex !== i;
+        const offset = isFocused ? 10 : 0;
+        const sliceRadius = baseRadius + (isFocused ? 3 : 0);
+        const sliceCx = cx + (Math.cos(midAngle) * offset);
+        const sliceCy = cy + (Math.sin(midAngle) * offset);
+
+        ctx.save();
+        ctx.globalAlpha = isMuted ? 0.28 : 1;
+        ctx.beginPath();
+        ctx.moveTo(sliceCx, sliceCy);
+        ctx.arc(sliceCx, sliceCy, sliceRadius, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fillStyle = ADMIN_DRINKS_PIE_COLORS[i % ADMIN_DRINKS_PIE_COLORS.length];
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = isFocused ? 2.8 : 1.5;
+        ctx.stroke();
+        ctx.restore();
+
+        adminDrinksPieState.slices.push({
+            startAngle,
+            endAngle,
+            radius: sliceRadius,
+            cx: sliceCx,
+            cy: sliceCy
+        });
+        startAngle = endAngle;
+    });
+
+    legendEl.innerHTML = data
+        .map((item, i) => {
+            const isFocused = focusIndex === i;
+            const isMuted = pinnedIndex >= 0 && pinnedIndex !== i;
+            const classes = [
+                'pie-legend-item',
+                isFocused ? 'is-active' : '',
+                isMuted ? 'is-muted' : ''
+            ].filter(Boolean).join(' ');
+            const color = ADMIN_DRINKS_PIE_COLORS[i % ADMIN_DRINKS_PIE_COLORS.length];
+            return `<button type="button" class="${classes}" data-index="${i}" aria-pressed="${pinnedIndex === i ? 'true' : 'false'}"><span class="pie-legend-dot" style="background:${color}"></span><span>${escapeHtml(item.name)}: ${item.qty.toLocaleString()} cases (${item.share.toFixed(1)}%)</span></button>`;
+        })
+        .join('');
+}
+
+function bindAdminDrinksPieInteractions() {
+    const canvas = document.getElementById('adminDrinksPieCanvas');
+    const legendEl = document.getElementById('adminDrinksPieLegend');
+    if (!canvas || !legendEl) return;
+
+    if (!canvas.dataset.bound) {
+        canvas.addEventListener('mousemove', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+            const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+            const hitIndex = getAdminDrinksPieHitIndex(x, y);
+            if (hitIndex !== adminDrinksPieState.hoverIndex) {
+                adminDrinksPieState.hoverIndex = hitIndex;
+                drawAdminDrinksPieChart();
+            }
+            canvas.style.cursor = hitIndex >= 0 ? 'pointer' : 'default';
+            if (hitIndex >= 0) {
+                showAdminDrinksPieTooltip(adminDrinksPieState.data[hitIndex], event.clientX, event.clientY);
+            } else {
+                hideAdminDrinksPieTooltip();
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            if (adminDrinksPieState.hoverIndex !== -1) {
+                adminDrinksPieState.hoverIndex = -1;
+                drawAdminDrinksPieChart();
+            }
+            canvas.style.cursor = 'default';
+            hideAdminDrinksPieTooltip();
+        });
+
+        canvas.addEventListener('click', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            const x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+            const y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+            const hitIndex = getAdminDrinksPieHitIndex(x, y);
+            adminDrinksPieState.pinnedIndex = adminDrinksPieState.pinnedIndex === hitIndex ? -1 : hitIndex;
+            drawAdminDrinksPieChart();
+        });
+
+        canvas.dataset.bound = '1';
+    }
+
+    if (!legendEl.dataset.bound) {
+        legendEl.addEventListener('mouseover', (event) => {
+            const target = event.target instanceof Element ? event.target.closest('.pie-legend-item') : null;
+            if (!target) return;
+            const index = Number(target.getAttribute('data-index'));
+            if (!Number.isFinite(index)) return;
+            adminDrinksPieState.hoverIndex = index;
+            drawAdminDrinksPieChart();
+        });
+
+        legendEl.addEventListener('mouseout', (event) => {
+            const leavingItem = event.target instanceof Element ? event.target.closest('.pie-legend-item') : null;
+            if (!leavingItem) return;
+            const enteringItem = event.relatedTarget instanceof Element ? event.relatedTarget.closest('.pie-legend-item') : null;
+            if (enteringItem) return;
+            adminDrinksPieState.hoverIndex = -1;
+            drawAdminDrinksPieChart();
+            hideAdminDrinksPieTooltip();
+        });
+
+        legendEl.addEventListener('click', (event) => {
+            const target = event.target instanceof Element ? event.target.closest('.pie-legend-item') : null;
+            if (!target) return;
+            event.preventDefault();
+            const index = Number(target.getAttribute('data-index'));
+            if (!Number.isFinite(index)) return;
+            adminDrinksPieState.pinnedIndex = adminDrinksPieState.pinnedIndex === index ? -1 : index;
+            drawAdminDrinksPieChart();
+        });
+
+        legendEl.dataset.bound = '1';
+    }
+}
+
+function renderAdminDrinksPieChart() {
+    const container = document.getElementById('adminDrinksPieContainer');
+    const canvas = document.getElementById('adminDrinksPieCanvas');
+    const legendEl = document.getElementById('adminDrinksPieLegend');
+    if (!container || !canvas || !legendEl) return;
+
+    adminDrinksPieState.data = getAdminDrinksPieData();
+    if (adminDrinksPieState.pinnedIndex >= adminDrinksPieState.data.length) {
+        adminDrinksPieState.pinnedIndex = -1;
+    }
+    if (adminDrinksPieState.hoverIndex >= adminDrinksPieState.data.length) {
+        adminDrinksPieState.hoverIndex = -1;
+    }
+
+    bindAdminDrinksPieInteractions();
+    drawAdminDrinksPieChart();
+}
+
+function toggleAdminDrinksPieChart() {
+    const container = document.getElementById('adminDrinksPieContainer');
+    if (!container) return;
+    const isVisible = container.style.display !== 'none';
+    container.style.display = isVisible ? 'none' : 'block';
+    if (isVisible) {
+        adminDrinksPieState.hoverIndex = -1;
+        hideAdminDrinksPieTooltip();
+        return;
+    }
+    renderAdminDrinksPieChart();
 }
 
 function getBusinessAiAdvisorSuggestions(analysis) {
@@ -4889,15 +5186,15 @@ function runAdminGrowthAnalysis(silent = false) {
     }
 }
 
-function exportAdminDailySalesPDF() {
+function exportAdminDailySalesPDF(dayIsoOverride = '') {
     if (!canAccessAdminPanel()) {
         alert('Only an active admin session can export daily sales.');
         return;
     }
 
     const dateInput = document.getElementById('adminSalesExportDate');
-    const selectedDate = String(dateInput?.value || getTodayISODate()).trim() || getTodayISODate();
-    if (dateInput && !dateInput.value) dateInput.value = selectedDate;
+    const selectedDate = String(dayIsoOverride || dateInput?.value || getTodayISODate()).trim() || getTodayISODate();
+    if (dateInput) dateInput.value = selectedDate;
 
     const daySales = getSalesForSpecificDay(selectedDate);
     if (!daySales.length) {
@@ -4979,6 +5276,112 @@ function exportAdminDailySalesPDF() {
     }
 }
 
+function exportAdminAllSalesPDF() {
+    if (!canAccessAdminPanel()) {
+        alert('Only an active admin session can export sales.');
+        return;
+    }
+
+    const allSales = (Array.isArray(sales) ? sales : [])
+        .filter((sale) => !!getSaleDateTimeOrNull(sale))
+        .slice()
+        .sort((a, b) => {
+            const aDate = getSaleDateTimeOrNull(a);
+            const bDate = getSaleDateTimeOrNull(b);
+            if (!aDate && !bDate) return 0;
+            if (!aDate) return 1;
+            if (!bDate) return -1;
+            return aDate - bDate;
+        });
+
+    if (!allSales.length) {
+        alert(t('adminNoSalesDataYet'));
+        return;
+    }
+
+    const totalSales = allSales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const cashSales = allSales
+        .filter((sale) => sale.type === 'normal')
+        .reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const creditSales = allSales
+        .filter((sale) => sale.type === 'credit')
+        .reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const totalProfit = calculateProfitFromSales(allSales);
+
+    const firstDay = getSaleDateIso(allSales[0]);
+    const lastDay = getSaleDateIso(allSales[allSales.length - 1]);
+    const rangeLabel = firstDay && lastDay ? `${formatPdfDate(firstDay)} - ${formatPdfDate(lastDay)}` : 'All time';
+
+    try {
+        const doc = createPDFDocument({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const reportTitle = 'All Sales';
+        let y = applyPdfBrandHeaderFirstPageOnly(doc, reportTitle);
+        const margin = 14;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(12, 96, 156);
+        doc.text(`All Sales Summary`, margin, y);
+        y += 6;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Range: ${rangeLabel}`, margin, y);
+        y += 5;
+        doc.text(`Transactions: ${allSales.length}`, margin, y);
+        doc.text(`Total Sales: RWF ${totalSales.toLocaleString()}`, margin + 54, y);
+        doc.text(`Profit: RWF ${totalProfit.toLocaleString()}`, margin + 124, y);
+        y += 5;
+        doc.text(`Cash: RWF ${cashSales.toLocaleString()}`, margin, y);
+        doc.text(`Credit: RWF ${creditSales.toLocaleString()}`, margin + 54, y);
+        y += 7;
+
+        const tableRows = allSales.map((sale) => {
+            const saleDate = getSaleDateTimeOrNull(sale);
+            const dayIso = saleDate ? saleDate.toISOString().slice(0, 10) : '';
+            const customerName = sale.type === 'credit'
+                ? (typeof getSafeCustomerName === 'function' ? getSafeCustomerName(sale.customerId) : 'Customer')
+                : 'Guest';
+            return [
+                dayIso ? formatPdfDate(dayIso) : '-',
+                saleDate ? saleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--',
+                String(sale.drinkName || 'Unknown'),
+                String(Number(sale.quantity) || 0),
+                `RWF ${Number(sale.unitPrice || 0).toLocaleString()}`,
+                `RWF ${Number(sale.total || 0).toLocaleString()}`,
+                sale.type === 'credit' ? 'Credit' : 'Cash',
+                String(customerName || 'Guest')
+            ];
+        });
+
+        if (typeof doc.autoTable === 'function') {
+            doc.autoTable({
+                startY: y,
+                head: [['Date', 'Time', 'Drink', 'Qty', 'Unit Price', 'Total', 'Type', 'Customer']],
+                body: tableRows,
+                theme: 'grid',
+                styles: { fontSize: 8.4, cellPadding: 2.2 },
+                headStyles: { fillColor: [13, 124, 227], textColor: 255 },
+                alternateRowStyles: { fillColor: [245, 250, 255] }
+            });
+        } else {
+            doc.setFontSize(8.5);
+            tableRows.slice(0, 26).forEach((row, idx) => {
+                const yy = y + (idx * 4.8);
+                doc.text(`${row[0]} ${row[1]} | ${row[2]} | ${row[3]} | ${row[5]} | ${row[6]}`, margin, yy);
+            });
+        }
+
+        applyPdfBrandFooter(doc, reportTitle);
+        const todayIso = new Date().toISOString().slice(0, 10);
+        doc.save(`admin-all-sales-${todayIso}.pdf`);
+        showSuccessToast('All sales PDF exported.');
+    } catch (error) {
+        console.error('Admin all sales export failed:', error);
+        alert(`Could not export all sales PDF: ${error.message}`);
+    }
+}
+
 function exportAdminStockAuditPDF() {
     if (!canAccessAdminPanel()) {
         alert('Only an active admin session can export stock audit PDF.');
@@ -5001,6 +5404,11 @@ function renderAdminPanel() {
     setAdminMainTab(activeAdminMainTab);
     if (activeAdminMainTab === 'sales') {
         setAdminSalesSubTab(activeAdminSalesSubTab);
+    }
+
+    const tabsBar = document.getElementById('adminMainTabsBar');
+    if (tabsBar) {
+        tabsBar.style.display = isAdminSessionActive() ? 'none' : '';
     }
 
     const users = getAuthUsers();
@@ -5266,37 +5674,6 @@ function getAdminExportUserRows() {
     }));
 }
 
-function exportAdminUsersJSON() {
-    if (!canAccessAdminPanel()) {
-        alert('Only an active admin session can export account data.');
-        return;
-    }
-
-    const rows = getAdminExportUserRows();
-    const payload = {
-        generatedAt: new Date().toISOString(),
-        exportedBy: activeUser ? (activeUser.name || activeUser.phone || activeUser.email || 'Admin') : 'Admin',
-        users: rows
-    };
-
-    try {
-        const json = JSON.stringify(payload, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = `admin-accounts-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        URL.revokeObjectURL(url);
-        showSuccessToast('Admin account JSON exported.');
-    } catch (error) {
-        console.error('Admin JSON export failed:', error);
-        alert(`Could not export JSON: ${error.message}`);
-    }
-}
-
 function exportAdminUsersPDF() {
     if (!canAccessAdminPanel()) {
         alert('Only an active admin session can export account data.');
@@ -5373,7 +5750,7 @@ function exportAdminUsersPDF() {
 function showPage(pageName) {
     refreshAdminAccessUI();
     const adminSession = isAdminSessionActive();
-    const adminVisiblePages = new Set(['home', 'reports', 'adminHub']);
+    const adminVisiblePages = new Set(['home', 'reports', 'adminSales', 'adminAccounts', 'adminHub', 'settings']);
     let requestedPage = pageName;
     let targetPage = pageName;
 
@@ -5381,8 +5758,20 @@ function showPage(pageName) {
         if (!adminVisiblePages.has(requestedPage)) {
             requestedPage = 'home';
         }
-        targetPage = requestedPage === 'adminHub' ? 'adminPanel' : requestedPage;
+        if (requestedPage === 'adminSales') {
+            activeAdminMainTab = 'sales';
+            targetPage = 'adminPanel';
+        } else if (requestedPage === 'adminAccounts') {
+            activeAdminMainTab = 'accounts';
+            targetPage = 'adminPanel';
+        } else {
+            targetPage = requestedPage === 'adminHub' ? 'adminPanel' : requestedPage;
+        }
     } else {
+        if (requestedPage === 'reports') {
+            requestedPage = 'home';
+            targetPage = 'home';
+        }
         if (requestedPage === 'adminHub') {
             alert('Only admin/owner accounts can open Management.');
             requestedPage = 'home';
@@ -6004,184 +6393,286 @@ function updateDrinkList() {
     const drinkList = document.getElementById('drinkList');
     if (!drinkList) return;
     const allowProfit = canViewProfitData();
-    
+    const searchInput = document.getElementById('drinkSearch');
+    const search = searchInput ? String(searchInput.value || '').toLowerCase().trim() : '';
+
+    sanitizeSelectedDrinksDraft();
+    syncDrinkSelectionModeButton();
     clearElement(drinkList);
-    
-    if (drinks.length === 0) {
+
+    if (!Array.isArray(drinks) || drinks.length === 0) {
         drinkList.innerHTML = '<div class="no-data">No drinks saved yet. Add one below!</div>';
         return;
     }
-    
-    drinks.forEach((drink, index) => {
+
+    const visibleDrinks = drinks
+        .map((drink, index) => ({ drink, index }))
+        .filter(({ drink }) => String(drink?.name || '').toLowerCase().includes(search));
+
+    if (!visibleDrinks.length) {
+        drinkList.innerHTML = '<div class="no-data">No drinks found</div>';
+        return;
+    }
+
+    visibleDrinks.forEach(({ drink, index }) => {
         const drinkProfit = getDrinkProfitPerCaseByName(drink.name);
         const profitMeta = allowProfit ? `<span>Profit/Case: RWF ${drinkProfit.toLocaleString()}</span>` : '';
         const stockQty = getDrinkStockQty(drink);
         const stockStatus = getDrinkStockStatus(drink);
         const stockLabel = getStockStatusLabel(stockStatus);
         const stockClass = stockStatus === 'out' ? 'stock-status-out' : (stockStatus === 'low' ? 'stock-status-low' : 'stock-status-ok');
-        const disableSelect = stockStatus === 'out';
+        const disableSelect = stockStatus === 'out' || getAvailableStockForDrinkIndex(index) <= 0;
+        const isSelected = Object.prototype.hasOwnProperty.call(selectedDrinksDraft, drink.name);
+
         const item = document.createElement('div');
         item.className = 'drink-item';
         item.innerHTML = `
-            <div>
-                <strong>${drink.name}</strong>
-                <div class="drink-meta">
-                    <span class="drink-price">RWF ${drink.price.toLocaleString()}</span>
-                    ${profitMeta}
-                    <span>Stock: ${stockQty} case(s)</span>
-                    <span class="stock-status-badge ${stockClass}">${stockLabel}</span>
+            <div class="drink-item-main">
+                ${drinkSelectionModeEnabled ? `
+                    <label class="drink-select-inline">
+                        <input type="checkbox" ${isSelected ? 'checked' : ''} ${disableSelect ? 'disabled' : ''} aria-label="Select ${escapeHtml(drink.name)}">
+                    </label>
+                ` : ''}
+                <div class="drink-item-content">
+                    <strong>${escapeHtml(drink.name)}</strong>
+                    <div class="drink-meta">
+                        <span class="drink-price">RWF ${Number(drink.price || 0).toLocaleString()}</span>
+                        ${profitMeta}
+                        <span>Stock: ${stockQty} case(s)</span>
+                        <span class="stock-status-badge ${stockClass}">${stockLabel}</span>
+                    </div>
                 </div>
             </div>
             <div class="drink-actions">
                 <button class="select-drink-btn" onclick="selectDrink(${index})" ${disableSelect ? 'disabled title="Out of stock"' : ''}>${disableSelect ? 'Out' : 'Select'}</button>
-                <button onclick="deleteDrink(${index})" class="delete-drink-btn">🗑️</button>
+                <button onclick="deleteDrink(${index})" class="delete-drink-btn" aria-label="Delete ${escapeHtml(drink.name)}">&#128465;</button>
             </div>
         `;
+
+        if (drinkSelectionModeEnabled) {
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                checkbox.addEventListener('change', (event) => {
+                    toggleDrinkDraftSelection(drink.name, Boolean(event.target.checked));
+                });
+            }
+        }
+
         drinkList.appendChild(item);
     });
 }
 
 function filterDrinks() {
-    const search = document.getElementById('drinkSearch').value.toLowerCase();
-    const drinkList = document.getElementById('drinkList');
-    const allowProfit = canViewProfitData();
-    
-    if (!drinkList) return;
-    
-    clearElement(drinkList);
-    
-    const filteredDrinks = drinks.filter(drink => 
-        drink.name.toLowerCase().includes(search)
-    );
-    
-    if (filteredDrinks.length === 0) {
-        drinkList.innerHTML = '<div class="no-data">No drinks found</div>';
+    updateDrinkList();
+}
+
+function syncDrinkSelectionModeButton() {
+    const toggleBtn = document.getElementById('toggleDrinkSelectModeBtn');
+    if (!toggleBtn) return;
+    toggleBtn.textContent = drinkSelectionModeEnabled ? 'Done' : 'Select';
+    toggleBtn.setAttribute('aria-pressed', drinkSelectionModeEnabled ? 'true' : 'false');
+}
+
+function sanitizeSelectedDrinksDraft() {
+    const normalized = {};
+    Object.entries(selectedDrinksDraft || {}).forEach(([drinkName, qty]) => {
+        const drink = drinks.find((entry) => entry && entry.name === drinkName);
+        if (!drink) return;
+        if (getDrinkStockStatus(drink) === 'out') return;
+        const normalizedQty = Math.max(1, normalizeStockValue(qty, 1));
+        normalized[drinkName] = normalizedQty;
+    });
+    selectedDrinksDraft = normalized;
+}
+
+function getAvailableStockForDrinkIndex(drinkIndex) {
+    const drink = drinks[drinkIndex];
+    if (!drink) return 0;
+    const totalStock = getDrinkStockQty(drink);
+    const reservedQty = cart.reduce((sum, item) => {
+        if (item.drinkIndex !== drinkIndex) return sum;
+        return sum + (Number(item.quantity) || 0);
+    }, 0);
+    return Math.max(0, totalStock - reservedQty);
+}
+
+function getSelectedDraftItems() {
+    sanitizeSelectedDrinksDraft();
+    const selectedItems = [];
+    drinks.forEach((drink, index) => {
+        if (!drink || !Object.prototype.hasOwnProperty.call(selectedDrinksDraft, drink.name)) return;
+        selectedItems.push({
+            drink,
+            drinkIndex: index,
+            quantity: Math.max(1, normalizeStockValue(selectedDrinksDraft[drink.name], 1))
+        });
+    });
+    return selectedItems;
+}
+
+function toggleDrinkSelectionMode() {
+    drinkSelectionModeEnabled = !drinkSelectionModeEnabled;
+    syncDrinkSelectionModeButton();
+    updateDrinkList();
+}
+
+function toggleDrinkDraftSelection(drinkName, selected) {
+    const drink = drinks.find((entry) => entry && entry.name === drinkName);
+    if (!drink) {
+        delete selectedDrinksDraft[drinkName];
+        updateQuickDrinkSelect();
+        updateDrinkList();
         return;
     }
-    
-    filteredDrinks.forEach((drink, filteredIndex) => {
-        // Find original index
-        const originalIndex = drinks.findIndex(d => d.name === drink.name);
-        
-        const item = document.createElement('div');
-        item.className = 'drink-item';
-        const drinkProfit = getDrinkProfitPerCaseByName(drink.name);
-        const profitMeta = allowProfit ? `<span>Profit/Case: RWF ${drinkProfit.toLocaleString()}</span>` : '';
-        const stockQty = getDrinkStockQty(drink);
-        const stockStatus = getDrinkStockStatus(drink);
-        const stockLabel = getStockStatusLabel(stockStatus);
-        const stockClass = stockStatus === 'out' ? 'stock-status-out' : (stockStatus === 'low' ? 'stock-status-low' : 'stock-status-ok');
-        const disableSelect = stockStatus === 'out';
-        item.innerHTML = `
-            <div>
-                <strong>${drink.name}</strong>
-                <div class="drink-meta">
-                    <span class="drink-price">RWF ${drink.price.toLocaleString()}</span>
-                    ${profitMeta}
-                    <span>Stock: ${stockQty} case(s)</span>
-                    <span class="stock-status-badge ${stockClass}">${stockLabel}</span>
-                </div>
-            </div>
-            <div class="drink-actions">
-                <button class="select-drink-btn" onclick="selectDrink(${originalIndex})" ${disableSelect ? 'disabled title="Out of stock"' : ''}>${disableSelect ? 'Out' : 'Select'}</button>
-                <button onclick="deleteDrink(${originalIndex})" class="delete-drink-btn">🗑️</button>
-            </div>
-        `;
-        drinkList.appendChild(item);
-    });
+    if (selected && getDrinkStockStatus(drink) !== 'out') {
+        selectedDrinksDraft[drinkName] = Math.max(1, normalizeStockValue(selectedDrinksDraft[drinkName], 1));
+    } else {
+        delete selectedDrinksDraft[drinkName];
+    }
+    updateQuickDrinkSelect();
+    updateDrinkList();
+}
+
+function updateDrinkDraftQuantity(drinkName, value) {
+    if (!Object.prototype.hasOwnProperty.call(selectedDrinksDraft, drinkName)) return;
+    selectedDrinksDraft[drinkName] = Math.max(1, normalizeStockValue(value, 1));
+    updateQuickDrinkSelect();
 }
 
 function selectDrink(index) {
     const drink = drinks[index];
     if (!drink) return;
-    if (getDrinkStockQty(drink) <= 0) {
+    if (getDrinkStockStatus(drink) === 'out') {
         alert(`${drink.name} is out of stock.`);
         return;
     }
-    const select = document.getElementById('quickDrinkSelect');
-    if (select) {
-        select.value = index;
-    }
-    const qtyInput = document.getElementById('quickQuantity');
-    if (qtyInput) {
-        qtyInput.value = '1';
-    }
+    selectedDrinksDraft[drink.name] = Math.max(1, normalizeStockValue(selectedDrinksDraft[drink.name], 1));
+    updateQuickDrinkSelect();
+    updateDrinkList();
 }
 
 // ================= NEW CART FUNCTIONS =================
+function updateQuickDrinkSelectedCount() {
+    const countEl = document.getElementById('quickDrinkSelectedCount');
+    if (!countEl) return;
+    const count = Object.keys(selectedDrinksDraft || {}).length;
+    const suffix = count === 1 ? '' : 's';
+    countEl.textContent = `${count} drink${suffix} selected`;
+}
+
 function updateQuickDrinkSelect() {
-    const select = document.getElementById('quickDrinkSelect');
-    if (!select) return;
-    
-    select.innerHTML = `<option value="">${t('chooseDrink')}</option>`;
-    drinks.forEach((drink, index) => {
-        const stockQty = getDrinkStockQty(drink);
-        const status = getDrinkStockStatus(drink);
-        const option = document.createElement('option');
-        option.value = index;
-        option.textContent = `${drink.name} - RWF ${drink.price.toLocaleString()} | Stock: ${stockQty}`;
-        if (status === 'out') {
-            option.disabled = true;
-            option.textContent += ' (Out)';
-        } else if (status === 'low') {
-            option.textContent += ' (Low)';
-        }
-        select.appendChild(option);
+    const container = document.getElementById('quickDrinkSelect');
+    if (!container) return;
+
+    clearElement(container);
+    const selectedItems = getSelectedDraftItems();
+    if (!selectedItems.length) {
+        container.innerHTML = '<div class="quick-drink-empty">No drinks selected.</div>';
+        updateQuickDrinkSelectedCount();
+        const addBtn = document.getElementById('addSelectedToCartBtn');
+        if (addBtn) addBtn.disabled = true;
+        return;
+    }
+
+    selectedItems.forEach(({ drink, drinkIndex, quantity }) => {
+        const availableQty = getAvailableStockForDrinkIndex(drinkIndex);
+        const row = document.createElement('div');
+        row.className = 'selected-drink-row';
+
+        const info = document.createElement('div');
+        info.className = 'selected-drink-info';
+        const nameEl = document.createElement('span');
+        nameEl.className = 'quick-drink-name';
+        nameEl.textContent = drink.name;
+        const metaEl = document.createElement('span');
+        metaEl.className = 'quick-drink-meta';
+        metaEl.textContent = `RWF ${Number(drink.price || 0).toLocaleString()} | Available now: ${availableQty} case(s)`;
+        info.appendChild(nameEl);
+        info.appendChild(metaEl);
+
+        const qtyInput = document.createElement('input');
+        qtyInput.type = 'number';
+        qtyInput.min = '1';
+        qtyInput.step = '1';
+        qtyInput.value = String(quantity);
+        qtyInput.className = 'selected-drink-qty';
+        qtyInput.addEventListener('change', () => {
+            updateDrinkDraftQuantity(drink.name, qtyInput.value);
+        });
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'selected-drink-remove-btn';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', () => {
+            toggleDrinkDraftSelection(drink.name, false);
+        });
+
+        row.appendChild(info);
+        row.appendChild(qtyInput);
+        row.appendChild(removeBtn);
+        container.appendChild(row);
     });
+
+    updateQuickDrinkSelectedCount();
+    const addBtn = document.getElementById('addSelectedToCartBtn');
+    if (addBtn) addBtn.disabled = false;
+}
+
+function resetQuickDrinkSelection() {
+    selectedDrinksDraft = {};
+    updateQuickDrinkSelect();
+    updateDrinkList();
 }
 
 function addToCart() {
-    const drinkIndex = document.getElementById('quickDrinkSelect').value;
-    const quantity = parseInt(document.getElementById('quickQuantity').value) || 1;
-    
-    if (!drinkIndex || drinkIndex === '') {
-        alert('Please select a drink');
+    const selectedItems = getSelectedDraftItems();
+    if (!selectedItems.length) {
+        alert('Please select at least one drink');
         return;
     }
-    
-    if (quantity < 1) {
-        alert('Please enter a valid quantity');
+
+    const warnings = [];
+    let addedCount = 0;
+
+    selectedItems.forEach(({ drink, drinkIndex, quantity }) => {
+        const availableQty = getAvailableStockForDrinkIndex(drinkIndex);
+        if (availableQty <= 0) {
+            warnings.push(`${drink.name} is out of stock.`);
+            return;
+        }
+        if (quantity > availableQty) {
+            warnings.push(`Only ${availableQty} case(s) of ${drink.name} available right now.`);
+            return;
+        }
+
+        const existingItem = cart.findIndex(item => item.drinkIndex === drinkIndex);
+        if (existingItem >= 0) {
+            cart[existingItem].quantity += quantity;
+        } else {
+            cart.push({
+                drinkIndex,
+                drinkName: drink.name,
+                price: drink.price,
+                profitPerCase: getDrinkProfitPerCaseByName(drink.name),
+                quantity
+            });
+        }
+        addedCount += 1;
+    });
+
+    if (addedCount === 0) {
+        alert(warnings[0] || 'No drinks were added to cart.');
         return;
     }
-    
-    const parsedDrinkIndex = parseInt(drinkIndex);
-    const drink = drinks[parsedDrinkIndex];
-    if (!drink) {
-        alert('Drink not found.');
-        return;
-    }
-    const totalStock = getDrinkStockQty(drink);
-    const reservedQty = cart
-        .filter((item) => item.drinkIndex === parsedDrinkIndex)
-        .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    const availableQty = totalStock - reservedQty;
-    if (availableQty <= 0) {
-        alert(`${drink.name} is out of stock.`);
-        return;
-    }
-    if (quantity > availableQty) {
-        alert(`Only ${availableQty} case(s) of ${drink.name} available right now.`);
-        return;
-    }
-    
-    // Check if drink already in cart
-    const existingItem = cart.findIndex(item => item.drinkIndex === parsedDrinkIndex);
-    
-    if (existingItem >= 0) {
-        cart[existingItem].quantity += quantity;
-    } else {
-        cart.push({
-            drinkIndex: parsedDrinkIndex,
-            drinkName: drink.name,
-            price: drink.price,
-            profitPerCase: getDrinkProfitPerCaseByName(drink.name),
-            quantity: quantity
-        });
-    }
-    
+
     updateCartDisplay();
-    document.getElementById('quickDrinkSelect').value = '';
-    document.getElementById('quickQuantity').value = '1';
+    resetQuickDrinkSelection();
+    if (warnings.length > 0) {
+        showSuccessToast(`Added ${addedCount} drink(s). Some items were skipped.`);
+    } else {
+        showSuccessToast(`Added ${addedCount} drink(s) to cart.`);
+    }
     updateHome();
 }
 
@@ -6258,10 +6749,7 @@ function clearCart() {
     if (confirm('Clear all items from cart?')) {
         cart = [];
         updateCartDisplay();
-        const select = document.getElementById('quickDrinkSelect');
-        if (select) select.value = '';
-        const qtyInput = document.getElementById('quickQuantity');
-        if (qtyInput) qtyInput.value = '1';
+        resetQuickDrinkSelection();
         showSuccessToast('Cart cleared.');
     }
 }
@@ -6301,6 +6789,7 @@ async function confirmSale() {
     let totalAmount = 0;
     const saleItems = [];
     const nowIso = new Date().toISOString();
+    const transactionId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     
     // Create sale entries for each item
     cart.forEach(item => {
@@ -6316,6 +6805,7 @@ async function confirmSale() {
         
         const sale = {
             id: Date.now() + Math.random(),
+            transactionId,
             drinkName: item.drinkName,
             quantity: item.quantity,
             price: item.price,
@@ -6362,6 +6852,7 @@ async function confirmSale() {
     if (customerSelect) customerSelect.value = '';
     selectedCustomerId = null;
     currentSaleType = 'normal';
+    resetQuickDrinkSelection();
     updateCartDisplay();
     updateQuickDrinkSelect();
     updateDrinkList();
@@ -9281,6 +9772,21 @@ window.addEventListener('beforeunload', () => {
 });
 
 // ================= SALES HISTORY FUNCTIONS =================
+function getSalesTransactionGroupKey(sale) {
+    if (sale && sale.transactionId) {
+        return `txn:${String(sale.transactionId)}`;
+    }
+    const saleDate = new Date(sale?.date);
+    const legacyDateKey = Number.isNaN(saleDate.getTime())
+        ? String(sale?.date || 'unknown-date')
+        : saleDate.toISOString();
+    const customerKey = (sale?.customerId === null || sale?.customerId === undefined)
+        ? 'guest'
+        : String(sale.customerId);
+    const typeKey = String(sale?.type || 'normal');
+    return `legacy:${legacyDateKey}|${customerKey}|${typeKey}`;
+}
+
 function getSalesHistoryFilteredSales() {
     const searchTerm = (document.getElementById('salesSearch')?.value || '').trim().toLowerCase();
     const selectedDate = document.getElementById('salesHistoryDate')?.value || '';
@@ -9317,8 +9823,7 @@ function renderSalesHistoryRows(filteredSales) {
     const transactions = {};
     const sortedSales = [...filteredSales].sort((a, b) => new Date(b.date) - new Date(a.date));
     sortedSales.forEach((sale) => {
-        const saleDate = new Date(sale.date);
-        const timeKey = `${saleDate.toISOString().slice(0, 16)}|${sale.customerId || 'guest'}|${sale.type}`;
+        const timeKey = getSalesTransactionGroupKey(sale);
         if (!transactions[timeKey]) {
             transactions[timeKey] = {
                 date: sale.date,
@@ -9395,7 +9900,7 @@ function displaySalesHistory() {
     sortedSales.forEach((sale) => {
         // Create a unique key for the transaction - group by time (minute) and customer
         const saleDate = new Date(sale.date);
-        const timeKey = `${saleDate.toISOString().slice(0, 16)}|${sale.customerId || 'guest'}|${sale.type}`;
+        const timeKey = getSalesTransactionGroupKey(sale);
         
         if (!transactions[timeKey]) {
             transactions[timeKey] = {
@@ -9585,7 +10090,7 @@ function filterSalesByType(type, event) {
     
     sortedSales.forEach((sale) => {
         const saleDate = new Date(sale.date);
-        const timeKey = `${saleDate.toISOString().slice(0, 16)}|${sale.customerId || 'guest'}|${sale.type}`;
+        const timeKey = getSalesTransactionGroupKey(sale);
         
         if (!transactions[timeKey]) {
             transactions[timeKey] = {
@@ -9678,7 +10183,7 @@ function filterSalesHistory(searchTerm) {
     const transactions = {};
     filtered.forEach((sale) => {
         const saleDate = new Date(sale.date);
-        const timeKey = `${saleDate.toISOString().slice(0, 16)}|${sale.customerId || 'guest'}|${sale.type}`;
+        const timeKey = getSalesTransactionGroupKey(sale);
         
         if (!transactions[timeKey]) {
             transactions[timeKey] = {
@@ -9790,7 +10295,7 @@ function exportSalesHistoryPDF() {
 
         filteredSales.forEach(sale => {
             const d = new Date(sale.date);
-            const key = d.toISOString().slice(0,16) + "|" + (sale.customerId || "guest") + "|" + sale.type;
+            const key = getSalesTransactionGroupKey(sale);
 
             if (!transactions[key]) {
                 transactions[key] = {
@@ -10217,6 +10722,8 @@ function updateLanguageUI() {
         addSale: 'addSale',
         stockManagement: 'stockManagement',
         adminPanel: 'adminPanel',
+        adminSales: 'adminTabSales',
+        adminAccounts: 'adminTabAccountManagement',
         customers: 'customers',
         clate: 'clate',
         salesHistory: 'salesHistory',
@@ -10233,7 +10740,6 @@ function updateLanguageUI() {
             btn.textContent = t(key);
         }
     });
-    setText('#adminHubBtn .nav-label', 'Management');
     const topSettingsBtn = document.getElementById('topSettingsBtn');
     if (topSettingsBtn) {
         topSettingsBtn.title = t('settings');
@@ -10285,9 +10791,6 @@ function updateLanguageUI() {
     setPlaceholder('#resetNewPin', t('resetNewPin'));
     setPlaceholder('#resetConfirmPin', t('resetConfirmPin'));
     setAuthHintText();
-    setText('#onboardingSkipBtn', t('tutorialSkipAll'));
-    setText('#onboardingPrevBtn', t('tutorialBack'));
-    setText('#onboardingNextBtn', t('tutorialNext'));
     updateActiveUserBadge();
 
     // Home dashboard
@@ -10311,12 +10814,9 @@ function updateLanguageUI() {
     setText('#addSale button[onclick="saveNewDrink()"]', t('saveDrink'));
     setText('#addSale .sale-right > h3', t('currentSale'));
     setText('#addSale .sale-right > div:nth-of-type(1) h4', t('cartItems'));
-    setText('#addSale .sale-right > div:nth-of-type(2) h4', t('quickAdd'));
-    const quickLabels = document.querySelectorAll('#addSale .sale-right > div:nth-of-type(2) label');
-    if (quickLabels[0]) quickLabels[0].textContent = `${t('selectDrink')}:`;
-    if (quickLabels[1]) quickLabels[1].textContent = `${t('quantity')}:`;
-    setPlaceholder('#quickQuantity', t('enterQuantity'));
-    setText('#addSale button[onclick="addToCart()"]', t('addToCart'));
+    setText('#selectedDrinksTitle', 'Selected Drinks');
+    syncDrinkSelectionModeButton();
+    setText('#addSelectedToCartBtn', 'Add Selected to Cart');
     setText('#addSale .sale-type label', `${t('saleType')}:`);
     setText('#addSale #customerSelectContainer label', `${t('selectCustomer')}:`);
     setText('#addSale .total-display p', t('totalAmount'));
@@ -10339,11 +10839,11 @@ function updateLanguageUI() {
     setText('#adminSalesSubTabDailyBtn', t('adminSubTabDailySales'));
     setText('#adminSalesSubTabStockBtn', t('adminSubTabStock'));
     setText('#adminExportUsersPdfBtn', t('adminExportAccountsPdf'));
-    setText('#adminExportUsersJsonBtn', t('adminExportAccountsJson'));
     setPlaceholder('#adminUserSearch', t('adminSearchEmployersPlaceholder'));
     setText('#adminDailyExportTitle', t('adminDailyExportTitle'));
     setText('#adminDailyExportDesc', t('adminDailyExportDesc'));
     setText('#adminExportDayPdfBtn', t('adminExportDayPdf'));
+    setText('#adminExportAllSalesPdfBtn', t('adminExportAllSalesPdf'));
     setText('#adminStockAuditPdfBtn', t('adminStockAuditPdf'));
     setText('#adminStockSectionTitle', t('adminStockSectionTitle'));
     setText('#adminStockSectionDesc', t('adminStockSectionDesc'));
@@ -10373,6 +10873,7 @@ function updateLanguageUI() {
     setText('#adminDailyHeadCases', t('adminDailyHeadCases'));
     setText('#adminDailyHeadTotal', t('adminDailyHeadTotal'));
     setText('#adminDailyHeadProfit', t('adminDailyHeadProfit'));
+    setText('#adminDailyHeadPrint', t('adminDailyHeadPrint'));
     setText('#adminDailyNoDataCell', t('adminNoSalesDataYet'));
     setText('#adminEmployerAccountsTitle', t('adminEmployerAccountsTitle'));
     setText('#adminFilterAll', t('all'));
@@ -10459,7 +10960,6 @@ function updateLanguageUI() {
     setText('#settings label[for="currency"]', t('currencySymbol'));
     setText('#currencyInfoText', t('currencyInfo'));
     setText('#saveLanguageCurrencyBtn', t('saveLanguageCurrency'));
-    setText('#startTutorialBtn', t('runTutorial'));
     setText('#settings button[onclick="clearAllData()"]', t('clearAllData'));
     setText('#clearUserDataBtn', t('clearAllData'));
     setText('#clearWarningText', t('warningClearData'));
@@ -10628,6 +11128,9 @@ function clearAllData() {
 
 // Make functions available globally
 window.selectDrink = selectDrink;
+window.toggleDrinkSelectionMode = toggleDrinkSelectionMode;
+window.toggleDrinkDraftSelection = toggleDrinkDraftSelection;
+window.resetQuickDrinkSelection = resetQuickDrinkSelection;
 window.deleteDrink = deleteDrink;
 window.addToCart = addToCart;
 window.updateCartItemQty = updateCartItemQty;
@@ -10680,7 +11183,6 @@ window.saveProfitPercentage = saveProfitPercentage;
 window.saveDrinkProfitsFromSettings = saveDrinkProfitsFromSettings;
 window.setTheme = setTheme;
 window.saveCurrencyAndLanguage = saveCurrencyAndLanguage;
-window.startOnboardingTutorial = startOnboardingTutorial;
 window.clearAllData = clearAllData;
 window.openClearDataConfirmForm = openClearDataConfirmForm;
 window.closeClearDataConfirmForm = closeClearDataConfirmForm;
@@ -10708,12 +11210,15 @@ window.adminResetUserPin = adminResetUserPin;
 window.adminResetUserAdminPin = adminResetUserAdminPin;
 window.viewUserDataSnapshot = viewUserDataSnapshot;
 window.exportAdminUsersPDF = exportAdminUsersPDF;
-window.exportAdminUsersJSON = exportAdminUsersJSON;
 window.saveAdminStockValues = saveAdminStockValues;
 window.runAdminGrowthAnalysis = runAdminGrowthAnalysis;
 window.runBusinessAiAdvisor = runBusinessAiAdvisor;
 window.renderAdminBusinessAnalysisTab = renderAdminBusinessAnalysisTab;
+window.toggleAdminDrinksPieChart = toggleAdminDrinksPieChart;
 window.setAdminGrowthWindow = setAdminGrowthWindow;
 window.selectAdminGrowthPoint = selectAdminGrowthPoint;
 window.exportAdminDailySalesPDF = exportAdminDailySalesPDF;
+window.exportAdminAllSalesPDF = exportAdminAllSalesPDF;
 window.exportAdminStockAuditPDF = exportAdminStockAuditPDF;
+
+
