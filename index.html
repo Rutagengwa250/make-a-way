@@ -2408,11 +2408,17 @@
             <button class="nav-btn" data-page="stockManagement" onclick="showPage('stockManagement')">
                 <span class="nav-label">Stock Management</span>
             </button>
-            <button class="nav-btn" data-page="reports" onclick="showPage('reports')">
+            <button class="nav-btn" data-page="reports" onclick="showPage('reports')" style="display: none;">
                 <span class="nav-label">Reports</span>
             </button>
-            <button id="adminHubBtn" class="nav-btn" data-page="adminHub" onclick="showPage('adminHub')" style="display: none;">
-                <span class="nav-label">Management</span>
+            <button id="adminSalesBtn" class="nav-btn" data-page="adminSales" onclick="showPage('adminSales')" style="display: none;">
+                <span class="nav-label">Sales</span>
+            </button>
+            <button id="adminAccountsBtn" class="nav-btn" data-page="adminAccounts" onclick="showPage('adminAccounts')" style="display: none;">
+                <span class="nav-label">Account Management</span>
+            </button>
+            <button id="adminSettingsNavBtn" class="nav-btn" data-page="settings" onclick="showPage('settings')" style="display: none;">
+                <span class="nav-label">Settings</span>
             </button>
         </div>
         <div class="nav-group nav-group-meta">
@@ -2470,6 +2476,7 @@
                 <div class="sale-left">
                     <h3>Available Drinks</h3>
                     <input type="text" id="drinkSearch" class="search-input" placeholder="Search drinks..." oninput="filterDrinks()">
+                    <button id="toggleDrinkSelectModeBtn" class="quick-drink-tool-btn" type="button" onclick="toggleDrinkSelectionMode()">Select</button>
                     <div id="drinkList" class="drink-list"></div>
                     
                     <h3 style="margin-top: 30px;">Add New Drink</h3>
@@ -2498,20 +2505,14 @@
                     
                     <!-- Quick Add Section -->
                     <div style="background: #f8f9fa; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
-                        <h4 style="color: #2575fc; margin-bottom: 15px;">Quick Add Drink</h4>
+                        <h4 id="selectedDrinksTitle" style="color: #2575fc; margin-bottom: 15px;">Selected Drinks</h4>
                         <div class="form-group" style="margin-bottom: 10px;">
-                            <label style="font-size: 14px;">Select Drink:</label>
-                            <select id="quickDrinkSelect" style="width: 100%; padding: 10px; border: 2px solid #e1e5e9; border-radius: 8px; margin-top: 5px;">
-                                <option value="">Choose a drink...</option>
-                            </select>
+                            <div id="quickDrinkSelect" class="quick-drink-multi-list"></div>
+                            <p id="quickDrinkSelectedCount" class="quick-drink-selected-count">0 drinks selected</p>
+                            <p style="margin: 6px 0 0; font-size: 12px; color: #5c7392;">Use the Select button, tick drinks, then set quantity for each selected drink here.</p>
                         </div>
                         
-                        <div class="form-group">
-                            <label style="font-size: 14px;">Quantity:</label>
-                            <input type="number" id="quickQuantity" placeholder="Enter quantity" value="1" min="1" style="width: 100%; padding: 10px; border: 2px solid #e1e5e9; border-radius: 8px; margin-top: 5px;">
-                        </div>
-                        
-                        <button onclick="addToCart()" style="width: 100%; padding: 10px; background: #2575fc; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 10px;">Add to Cart</button>
+                        <button id="addSelectedToCartBtn" onclick="addToCart()" style="width: 100%; padding: 10px; background: #2575fc; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 10px;">Add Selected to Cart</button>
                     </div>
                     
                     <div class="sale-type">
@@ -2608,7 +2609,7 @@
 
             <p id="adminPanelDescription" class="page-description">Find employers, manage account roles, and control who can access this app.</p>
 
-            <div class="filter-buttons admin-main-tabs">
+            <div id="adminMainTabsBar" class="filter-buttons admin-main-tabs">
                 <button id="adminMainTabSalesBtn" class="filter-btn active" onclick="setAdminMainTab('sales', event)">Sales</button>
                 <button id="adminMainTabAccountsBtn" class="filter-btn" onclick="setAdminMainTab('accounts', event)">Account Management</button>
             </div>
@@ -2626,6 +2627,7 @@
                         <div class="settings-inline-row">
                             <input type="date" id="adminSalesExportDate">
                             <button id="adminExportDayPdfBtn" onclick="exportAdminDailySalesPDF()" class="add-btn">Export Day PDF</button>
+                            <button id="adminExportAllSalesPdfBtn" onclick="exportAdminAllSalesPDF()" class="add-btn" style="background: #3b82f6;">Export All Sales PDF</button>
                         </div>
                     </div>
 
@@ -2638,11 +2640,12 @@
                                     <th id="adminDailyHeadCases">Cases Sold</th>
                                     <th id="adminDailyHeadTotal">Total Sales</th>
                                     <th id="adminDailyHeadProfit">Profit</th>
+                                    <th id="adminDailyHeadPrint">Print</th>
                                 </tr>
                             </thead>
                             <tbody id="adminDailySummaryBody">
                                 <tr>
-                                    <td id="adminDailyNoDataCell" colspan="5" style="padding: 28px; text-align: center; color: #789;">No sales data yet.</td>
+                                    <td id="adminDailyNoDataCell" colspan="6" style="padding: 28px; text-align: center; color: #789;">No sales data yet.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -2706,10 +2709,9 @@
                 <div class="admin-tools-grid">
                     <div class="settings-card admin-tool-card">
                         <h3 id="adminAccountsExportTitle" class="settings-card-title" style="margin-bottom: 8px;">Account Exports</h3>
-                        <p id="adminAccountsExportDesc" class="settings-help-text" style="margin-bottom: 12px;">Download employer/account data in PDF or JSON.</p>
+                        <p id="adminAccountsExportDesc" class="settings-help-text" style="margin-bottom: 12px;">Download employer/account data in PDF.</p>
                         <div class="settings-inline-row" style="flex-wrap: wrap;">
                             <button id="adminExportUsersPdfBtn" onclick="exportAdminUsersPDF()" class="add-btn" style="background: #20a37c;">Export Accounts PDF</button>
-                            <button id="adminExportUsersJsonBtn" onclick="exportAdminUsersJSON()" class="add-btn" style="background: #3b82f6;">Export Accounts JSON</button>
                         </div>
                     </div>
 
@@ -2886,6 +2888,15 @@
                     <button id="growthWindow30Btn" class="growth-window-btn active" type="button" onclick="setAdminGrowthWindow(30)">30 Days</button>
                     <button id="growthWindow60Btn" class="growth-window-btn" type="button" onclick="setAdminGrowthWindow(60)">60 Days</button>
                     <button id="growthWindow90Btn" class="growth-window-btn" type="button" onclick="setAdminGrowthWindow(90)">90 Days</button>
+                    <button id="adminDrinksPieBtn" class="growth-window-btn" type="button" onclick="toggleAdminDrinksPieChart()" style="margin-left: 8px;">Drinks</button>
+                </div>
+                <div id="adminDrinksPieContainer" class="admin-drinks-pie-container" style="display: none;">
+                    <h4 class="admin-drinks-pie-title">Drinks loved by customers (share of cases sold)</h4>
+                    <div class="admin-drinks-pie-wrap">
+                        <canvas id="adminDrinksPieCanvas" width="320" height="320"></canvas>
+                        <div id="adminDrinksPieTooltip" class="admin-drinks-pie-tooltip" style="display: none;"></div>
+                        <div id="adminDrinksPieLegend" class="admin-drinks-pie-legend"></div>
+                    </div>
                 </div>
                 <div id="adminGrowthChart" class="admin-growth-chart"></div>
                 <div id="adminGrowthPointDetails" class="admin-growth-point-details">
@@ -3014,7 +3025,6 @@
                         <p id="purposeRow"><strong>Purpose:</strong> Business Tracking & Sales Management System</p>
                         <p id="storageRow"><strong>Storage:</strong> <span id="storageStatus">Checking...</span></p>
                         <p id="accountRow"><strong>Active Account:</strong> <span id="activeAccountName">Not logged in</span></p>
-                        <button id="startTutorialBtn" onclick="startOnboardingTutorial(true)" class="settings-btn settings-btn-primary">Run Tutorial</button>
                     </div>
                 </div>
 
@@ -3050,23 +3060,6 @@
         <div class="form-buttons">
             <button onclick="closeStockAdjustForm()" class="form-btn form-cancel" type="button">Cancel</button>
             <button id="stockAdjustSubmitBtn" onclick="confirmStockAdjustment()" class="form-btn form-submit" type="button">Save</button>
-        </div>
-    </div>
-</div>
-
-<div id="onboardingOverlay" class="onboarding-overlay" style="display: none;">
-    <div class="onboarding-card">
-        <div class="onboarding-glow" aria-hidden="true"></div>
-        <div class="onboarding-step"><span id="onboardingStepLabel">Step 1 of 6</span></div>
-        <div class="onboarding-progress"><span id="onboardingProgressBar"></span></div>
-        <h3 id="onboardingTitle">Welcome</h3>
-        <p id="onboardingText">This quick tutorial will guide you through the app.</p>
-        <div class="onboarding-actions">
-            <button id="onboardingSkipBtn" class="onboarding-btn mute" type="button">Skip All</button>
-            <div style="display: flex; gap: 8px;">
-                <button id="onboardingPrevBtn" class="onboarding-btn mute" type="button">Back</button>
-                <button id="onboardingNextBtn" class="onboarding-btn primary" type="button">Next</button>
-            </div>
         </div>
     </div>
 </div>
