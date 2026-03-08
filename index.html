@@ -2154,7 +2154,7 @@
 </div>
 
 <!-- Login Screen -->
-<div id="loginScreen">
+<div id="loginScreen" style="display: none; visibility: hidden;">
     <!-- Background Letters -->
     <div class="bg-letters">
         <div class="letter M">M</div>
@@ -2179,14 +2179,9 @@
             <input type="text" id="signupName" placeholder="Enter your full name" autocomplete="off">
         </div>
 
-        <div class="input-group" id="signupEmailGroup" style="display: none;">
-            <label for="signupEmail">Email Address</label>
-            <input type="email" id="signupEmail" placeholder="Enter your email address" autocomplete="off">
-        </div>
-
         <div class="input-group">
-            <label for="phone">Phone Number or Email</label>
-            <input type="text" id="phone" placeholder="Enter your phone or email" autocomplete="off">
+            <label for="phone">Phone Number</label>
+            <input type="tel" id="phone" placeholder="Enter your phone number" autocomplete="off">
         </div>
         
         <div class="input-group">
@@ -2199,14 +2194,24 @@
             <input type="password" id="confirmPin" maxlength="5" inputmode="numeric" pattern="[0-9]{5}" placeholder="Confirm your PIN" autocomplete="off">
         </div>
 
-        <div class="input-group" id="signupVerificationGroup" style="display: none;">
-            <label for="signupVerificationCode">Verification Code</label>
-            <div class="verification-inline">
-                <input type="text" id="signupVerificationCode" maxlength="6" placeholder="Enter 6-digit code" autocomplete="off">
-                <button id="sendSignupCodeBtn" class="code-btn" type="button">Send Code</button>
-            </div>
+        <div class="input-group" id="signupRoleGroup" style="display: none;">
+            <label for="signupRole">Account Type</label>
+            <select id="signupRole">
+                <option value="staff">Staff Account</option>
+                <option value="admin">Admin Account</option>
+            </select>
         </div>
-        
+
+        <div class="input-group" id="signupAdminPinGroup" style="display: none;">
+            <label for="signupAdminPin">Admin PIN (5-digit)</label>
+            <input type="password" id="signupAdminPin" maxlength="5" inputmode="numeric" pattern="[0-9]{5}" placeholder="Enter admin PIN" autocomplete="off">
+        </div>
+
+        <div class="input-group" id="signupAdminPinConfirmGroup" style="display: none;">
+            <label for="signupAdminPinConfirm">Confirm Admin PIN</label>
+            <input type="password" id="signupAdminPinConfirm" maxlength="5" inputmode="numeric" pattern="[0-9]{5}" placeholder="Confirm admin PIN" autocomplete="off">
+        </div>
+
         <button id="loginBtn" class="login-button">LOGIN</button>
         <button id="signupBtn" class="login-button signup-button" style="display: none;">CREATE ACCOUNT</button>
         
@@ -2217,17 +2222,6 @@
             <div class="input-group">
                 <label for="resetPhone">Phone Number</label>
                 <input type="tel" id="resetPhone" placeholder="Enter your phone number" autocomplete="off">
-            </div>
-            <div class="input-group">
-                <label for="resetEmail">Email Address</label>
-                <input type="email" id="resetEmail" placeholder="Enter your email address" autocomplete="off">
-            </div>
-            <div class="input-group">
-                <label for="resetCode">Verification Code</label>
-                <div class="verification-inline">
-                    <input type="text" id="resetCode" maxlength="6" placeholder="Enter 6-digit code" autocomplete="off">
-                    <button id="sendResetCodeBtn" class="code-btn" type="button">Send Code</button>
-                </div>
             </div>
             <div class="input-group">
                 <label for="resetNewPin">New 5-digit PIN</label>
@@ -3030,6 +3024,14 @@
 
                 <div class="settings-card settings-card-danger" id="settingsDataCard">
                     <h3 id="settingsDataTitle" class="settings-card-title">Data Management</h3>
+                    <div class="settings-group">
+                        <label for="archiveYearSelect">Archive Completed Year</label>
+                        <div class="settings-inline-row">
+                            <select id="archiveYearSelect"></select>
+                            <button id="archiveYearBtn" onclick="archiveSelectedYear()" class="settings-btn settings-btn-primary">Archive Year</button>
+                        </div>
+                        <p id="archiveYearInfo" class="settings-help-text">Moves selected year sales and deposit records into archive and removes them from active workspace.</p>
+                    </div>
                     <div class="settings-danger-actions">
                         <button id="clearUserDataBtn" onclick="clearAllData()" class="settings-btn settings-btn-danger settings-full-btn">Clear User Data</button>
                     </div>
@@ -3064,17 +3066,6 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script>
-    // Web email settings (EmailJS). Fill these 3 values from your EmailJS account.
-    // Expected template variables: to_email, verification_code, app_name, purpose, purpose_label, from_name
-    window.MAW_EMAILJS_CONFIG = {
-        publicKey: '',
-        serviceId: '',
-        templateId: '',
-        fromName: 'Make A Way'
-    };
-</script>
 <script src="script.js"></script>
 <script>
     // Make sure modal close button works
