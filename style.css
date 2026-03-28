@@ -7260,11 +7260,11 @@ body.dark-mode .ai-command-btn:hover {
 
 /* ================= AUTH FLOW REFRESH ================= */
 .login-shell {
-    width: min(100%, 470px);
+    width: min(100%, 430px);
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 18px;
+    gap: 12px;
 }
 
 .login-shell .login-logo {
