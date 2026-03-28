@@ -6,8 +6,11 @@
     <script src="libs/html2canvas.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1565c0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Make A Way</title>
     <link rel="icon" href="logo.png" type="image/png">
+    <link rel="manifest" href="manifest.webmanifest">
     <link rel="stylesheet" href="style.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
@@ -2331,82 +2334,97 @@
         <div class="letter W">W</div>
     </div>
     
-    <div class="login-logo">
-        <img src="logo.png" alt="Make A Way Logo">
-    </div>
-
-    <div class="login-card">
-        <h2>MAKE A WAY</h2>
-        <div class="auth-tabs">
-            <button id="authLoginTab" class="auth-tab-btn active" type="button">Login</button>
-            <button id="authAdminTab" class="auth-tab-btn" type="button">Admin</button>
-            <button id="authSignupTab" class="auth-tab-btn" type="button">Sign Up</button>
+    <div class="login-shell">
+        <div class="login-logo">
+            <img src="logo.png" alt="Make A Way Logo">
         </div>
 
-        <div class="input-group" id="signupNameGroup" style="display: none;">
-            <label for="signupName">Full Name</label>
-            <input type="text" id="signupName" placeholder="Enter your full name" autocomplete="off">
-        </div>
-
-        <div class="input-group">
-            <label for="phone">Phone Number</label>
-            <input type="tel" id="phone" placeholder="Enter your phone number" autocomplete="off">
-        </div>
-        
-        <div class="input-group">
-            <label for="pin">Password</label>
-            <input type="password" id="pin" maxlength="64" placeholder="Enter password" autocomplete="current-password">
-        </div>
-
-        <div class="input-group" id="confirmPinGroup" style="display: none;">
-            <label for="confirmPin">Confirm Password</label>
-            <input type="password" id="confirmPin" maxlength="64" placeholder="Confirm your password" autocomplete="new-password">
-        </div>
-
-        <div class="input-group" id="signupRoleGroup" style="display: none;">
-            <label for="signupRole">Account Type</label>
-            <select id="signupRole">
-                <option value="staff">Staff Account</option>
-                <option value="admin">Admin Account</option>
-            </select>
-        </div>
-
-        <div class="input-group" id="signupAdminPinGroup" style="display: none;">
-            <label for="signupAdminPin">Admin Password</label>
-            <input type="password" id="signupAdminPin" maxlength="64" placeholder="Enter admin password" autocomplete="new-password">
-        </div>
-
-        <div class="input-group" id="signupAdminPinConfirmGroup" style="display: none;">
-            <label for="signupAdminPinConfirm">Confirm Admin Password</label>
-            <input type="password" id="signupAdminPinConfirm" maxlength="64" placeholder="Confirm admin password" autocomplete="new-password">
-        </div>
-
-        <button id="loginBtn" class="login-button">LOGIN</button>
-        <button id="signupBtn" class="login-button signup-button" style="display: none;">CREATE ACCOUNT</button>
-        
-        <button id="forgotPinBtn" class="auth-link-btn" type="button">Forgot PIN?</button>
-
-        <div id="forgotPinPanel" class="forgot-panel" style="display: none;">
-            <h3 id="forgotPinTitle">Reset PIN</h3>
-            <div class="input-group">
-                <label for="resetPhone">Phone Number</label>
-                <input type="tel" id="resetPhone" placeholder="Enter your phone number" autocomplete="off">
+        <div class="login-card">
+            <h2>MAKE A WAY</h2>
+            <p id="authSubtitle" class="auth-subtitle">Business sales, stock, backup, and reporting in one workspace.</p>
+            <div class="auth-feature-pills" aria-hidden="true">
+                <span class="auth-feature-pill">Offline Ready</span>
+                <span class="auth-feature-pill">Daily PDF Backup</span>
+                <span class="auth-feature-pill">Smart Reports</span>
             </div>
-            <div class="input-group">
-                <label for="resetNewPin">New Password</label>
-                <input type="password" id="resetNewPin" maxlength="64" placeholder="Enter new password" autocomplete="new-password">
+            <div class="auth-tabs">
+                <button id="authLoginTab" class="auth-tab-btn active" type="button">Login</button>
+                <button id="authAdminTab" class="auth-tab-btn" type="button">Admin</button>
+                <button id="authSignupTab" class="auth-tab-btn" type="button">Sign Up</button>
             </div>
-            <div class="input-group">
-                <label for="resetConfirmPin">Confirm New Password</label>
-                <input type="password" id="resetConfirmPin" maxlength="64" placeholder="Confirm new password" autocomplete="new-password">
+            <div id="authModeSummary" class="auth-mode-summary" aria-live="polite">
+                <strong id="authModeSummaryTitle">Staff Login</strong>
+                <p id="authModeSummaryText">Use your phone number and password to open today&apos;s workspace.</p>
             </div>
-            <button id="resetPinBtn" class="login-button">RESET PIN</button>
-            <button id="cancelResetPinBtn" class="auth-link-btn" type="button">Cancel</button>
+            <div id="authFeedback" class="auth-status" role="status" aria-live="polite" style="display: none;"></div>
+
+            <div class="input-group" id="signupNameGroup" style="display: none;">
+                <label for="signupName">Full Name</label>
+                <input type="text" id="signupName" placeholder="Enter your full name" autocomplete="off">
+            </div>
+
+            <div class="input-group">
+                <label for="phone">Phone Number</label>
+                <input type="tel" id="phone" placeholder="Enter your phone number" autocomplete="off">
+            </div>
+            
+            <div class="input-group">
+                <label for="pin">Password</label>
+                <input type="password" id="pin" maxlength="64" placeholder="Enter password" autocomplete="current-password">
+            </div>
+
+            <div class="input-group" id="confirmPinGroup" style="display: none;">
+                <label for="confirmPin">Confirm Password</label>
+                <input type="password" id="confirmPin" maxlength="64" placeholder="Confirm your password" autocomplete="new-password">
+            </div>
+
+            <div class="input-group" id="signupRoleGroup" style="display: none;">
+                <label for="signupRole">Account Type</label>
+                <select id="signupRole">
+                    <option value="staff">Staff Account</option>
+                    <option value="admin">Admin Account</option>
+                </select>
+            </div>
+
+            <div class="input-group" id="signupAdminPinGroup" style="display: none;">
+                <label for="signupAdminPin">Admin Password</label>
+                <input type="password" id="signupAdminPin" maxlength="64" placeholder="Enter admin password" autocomplete="new-password">
+            </div>
+
+            <div class="input-group" id="signupAdminPinConfirmGroup" style="display: none;">
+                <label for="signupAdminPinConfirm">Confirm Admin Password</label>
+                <input type="password" id="signupAdminPinConfirm" maxlength="64" placeholder="Confirm admin password" autocomplete="new-password">
+            </div>
+
+            <button id="loginBtn" class="login-button">LOGIN</button>
+            <button id="signupBtn" class="login-button signup-button" style="display: none;">CREATE ACCOUNT</button>
+            
+            <button id="forgotPinBtn" class="auth-link-btn" type="button">Forgot Password?</button>
+
+            <div id="forgotPinPanel" class="forgot-panel" style="display: none;">
+                <h3 id="forgotPinTitle">Reset Password</h3>
+                <p id="forgotPinDescription" class="auth-panel-note">Use the phone number registered on the account, then choose a new password.</p>
+                <p id="resetAccountPreview" class="auth-account-preview">We will match the phone number to an existing account.</p>
+                <div class="input-group">
+                    <label for="resetPhone">Phone Number</label>
+                    <input type="tel" id="resetPhone" placeholder="Enter your phone number" autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <label for="resetNewPin">New Password</label>
+                    <input type="password" id="resetNewPin" maxlength="64" placeholder="Enter new password" autocomplete="new-password">
+                </div>
+                <div class="input-group">
+                    <label for="resetConfirmPin">Confirm New Password</label>
+                    <input type="password" id="resetConfirmPin" maxlength="64" placeholder="Confirm new password" autocomplete="new-password">
+                </div>
+                <button id="resetPinBtn" class="login-button">RESET PASSWORD</button>
+                <button id="cancelResetPinBtn" class="auth-link-btn" type="button">Cancel</button>
+            </div>
+
+            <p id="authHint" class="login-note">
+                Welcome to Make A Way!<br>
+            </p>
         </div>
-        
-        <p id="authHint" class="login-note">
-            Welcome to Make A Way!<br>
-        </p>
     </div>
 </div>
 
@@ -2548,6 +2566,13 @@
         <div id="activeUserBadge" class="active-user-badge" style="display: none;"></div>
         <button id="logoutBtn" class="logout-btn">Logout</button>
         <button id="topSettingsBtn" class="top-settings-btn" type="button" onclick="showPage('settings')" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+    <div id="connectivityBanner" class="connectivity-banner" style="display: none;" aria-live="polite">
+        <div class="connectivity-banner-copy">
+            <strong id="connectivityBannerTitle">Offline mode active</strong>
+            <p id="connectivityBannerMessage">Sales still save on this device. When internet comes back, the app will refresh online features and update the offline cache.</p>
+        </div>
+        <button id="connectivitySyncBtn" class="settings-btn settings-btn-primary" type="button" onclick="triggerManualSync()">Sync Now</button>
     </div>
     
     <!-- Navigation -->
@@ -3215,6 +3240,31 @@
                         <p id="purposeRow"><strong>Purpose:</strong> Business Tracking & Sales Management System</p>
                         <p id="storageRow"><strong>Storage:</strong> <span id="storageStatus">Checking...</span></p>
                         <p id="accountRow"><strong>Active Account:</strong> <span id="activeAccountName">Not logged in</span></p>
+                        <p id="networkRow"><strong>Connection:</strong> <span id="connectivityStatusText">Checking...</span></p>
+                        <p id="syncRow"><strong>Offline Sync:</strong> <span id="syncStatusText">Waiting...</span></p>
+                        <div class="settings-inline-row">
+                            <button id="syncNowBtn" onclick="triggerManualSync()" class="settings-btn settings-btn-primary" type="button">Sync Now</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-card settings-card-secondary" id="settingsAdminAutomationCard" style="display: none;">
+                    <h3 class="settings-card-title">Admin Automation</h3>
+                    <div class="admin-auto-pdf-card" style="margin-top: 0;">
+                        <p class="settings-help-text" style="margin: 0 0 12px;">Choose when the app should auto-download the day&apos;s sales PDF.</p>
+                        <label class="admin-auto-pdf-toggle" for="adminAutoPdfEnabled">
+                            <input type="checkbox" id="adminAutoPdfEnabled">
+                            <span>Auto-download the day&apos;s sales PDF every day</span>
+                        </label>
+                        <div class="admin-auto-pdf-row">
+                            <div class="admin-auto-pdf-field">
+                                <label for="adminAutoPdfTime">Export Time</label>
+                                <input type="time" id="adminAutoPdfTime" step="60">
+                            </div>
+                            <button id="saveAdminAutoPdfBtn" onclick="saveAutoDailySalesPdfSettings()" class="settings-btn settings-btn-primary" type="button">Save Auto Export</button>
+                            <button id="downloadLastAutoPdfBtn" onclick="downloadLastAutoDailySalesPdf()" class="settings-btn" type="button">Download Last Auto PDF</button>
+                        </div>
+                        <p id="adminAutoPdfStatus" class="settings-help-text">Choose a close-of-business time, keep the app open, and allow automatic downloads in your browser.</p>
                     </div>
                 </div>
 
