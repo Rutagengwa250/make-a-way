@@ -291,6 +291,8 @@ let rwandaClockInterval = null;
 let rwandaClockSyncInterval = null;
 let rwandaClockBaseEpochMs = null;
 let rwandaClockBasePerfMs = null;
+let autoBackupTimeout = null;
+const AUTO_BACKUP_HOUR = 22;
 
 const RWANDA_TIME_ZONE = 'Africa/Kigali';
 const RWANDA_TIME_SYNC_INTERVAL_MS = 5 * 60 * 1000;
@@ -315,6 +317,22 @@ const adminDrinksPieState = {
     slices: [],
     hoverIndex: -1,
     pinnedIndex: -1
+};
+const AI_ASSISTANT_CACHE_TTL_MS = 60000;
+const AI_ASSISTANT_RESTOCK_WINDOW_DAYS = 30;
+const AI_ASSISTANT_FAST_WINDOW_DAYS = 7;
+const AI_ASSISTANT_SLOW_WINDOW_DAYS = 30;
+const AI_ASSISTANT_MAX_PRIORITIES = 5;
+const aiAssistantState = {
+    isOpen: false,
+    cacheAt: 0,
+    cachedAnalysis: null,
+    lastDailyReportDate: '',
+    voiceRecognition: null,
+    voiceActive: false,
+    generating: false,
+    externalAdviceCache: {},
+    externalAdviceCacheAt: {}
 };
 
 // ================= TRANSLATION SYSTEM =================
@@ -344,7 +362,7 @@ const translations = {
         adminExportAccountsPdf: 'Export Accounts PDF',
         adminSearchEmployersPlaceholder: 'Find employers by name, phone, or email...',
         adminFilterPrivileged: 'Admin/Owner',
-        adminFilterStaff: 'Staff',
+        adminFilterStaff: 'Employees',
         adminFilterInactive: 'Inactive',
         adminDailyExportTitle: 'Daily Sales Export',
         adminDailyExportDesc: 'Select a specific day and export all sales in ordered time.',
@@ -369,7 +387,7 @@ const translations = {
         adminAiPlaceholder: 'Run analysis to generate growth strategies.',
         adminSummaryTotalAccounts: 'Total Accounts',
         adminSummaryAdminOwner: 'Admin + Owner',
-        adminSummaryStaff: 'Staff',
+        adminSummaryStaff: 'Employees',
         adminSummaryInactive: 'Inactive',
         adminDailyHeadDate: 'Date',
         adminDailyHeadTransactions: 'Transactions',
@@ -383,18 +401,18 @@ const translations = {
         adminNoEmployersMatch: 'No employers match this filter.',
         adminAnalysisRequiresSession: 'Admin session required for analysis.',
         adminExportDayNoSales: 'No sales found for that day.',
-        signUp: 'Sign Up',
+        signUp: 'Admin Sign Up',
         fullName: 'Full Name',
         phoneOrEmail: 'Phone Number',
         emailAddress: 'Email Address',
         phoneNumber: 'Phone Number',
-        pinLabel: '5-digit PIN',
-        confirmPin: 'Confirm PIN',
+        pinLabel: 'Password',
+        confirmPin: 'Confirm Password',
         accountType: 'Account Type',
-        signupRoleStaff: 'Staff Account',
+        signupRoleStaff: 'Employee Account',
         signupRoleAdmin: 'Admin Account',
-        adminPinLabel: 'Admin PIN (5-digit)',
-        confirmAdminPin: 'Confirm Admin PIN',
+        adminPinLabel: 'Admin Password',
+        confirmAdminPin: 'Confirm Admin Password',
         createAccount: 'Create Account',
         continueWithGoogle: 'Continue with Google',
         googleEmailPrompt: 'Enter your Google email',
@@ -405,26 +423,26 @@ const translations = {
         googleServiceUnavailable: 'Google login service is not available right now.',
         verificationCode: 'Verification Code',
         sendCode: 'Send Code',
-        forgotPin: 'Forgot PIN?',
-        resetPin: 'Reset PIN',
-        resetPinHint: 'Use your phone number to set a new PIN.',
-        resetNewPin: 'New 5-digit PIN',
-        resetConfirmPin: 'Confirm New PIN', 
+        forgotPin: 'Forgot Password?',
+        resetPin: 'Reset Password',
+        resetPinHint: 'Use your phone number to set a new password.',
+        resetNewPin: 'New Password',
+        resetConfirmPin: 'Confirm New Password', 
         cancel: 'Cancel',
         authHintLogin: 'Welcome back to Make A Way!',
-        authHintAdmin: 'Admin login uses your phone number with a separate admin PIN.',
-        authHintSignup: 'Create your account to secure this app.',
-        authHintReset: 'Reset your PIN with your registered phone number.',
-        authInvalidCredentials: 'Incorrect phone number or PIN',
+        authHintAdmin: 'Admin login uses your phone number and password.',
+        authHintSignup: 'Admin sign-up only. Create the owner account to secure this app.',
+        authHintReset: 'Reset your password with your registered phone number.',
+        authInvalidCredentials: 'Incorrect phone number or password',
         authAccountInactive: 'This account is inactive. Please contact the owner.',
-        authAdminInvalidCredentials: 'Incorrect admin phone number or admin PIN',
+        authAdminInvalidCredentials: 'Incorrect admin phone number or password',
         authAdminAccessDenied: 'This account does not have admin access',
-        authAdminSetupRequiresUserPin: 'To create admin PIN, enter your normal user PIN first.',
-        authAdminSetupPrompt: 'Set a new 5-digit Admin PIN',
-        authAdminConfirmPrompt: 'Confirm Admin PIN',
-        authAdminPinMustDiffer: 'Admin PIN must be different from your normal PIN',
-        authAdminSetupCancelled: 'Admin PIN setup cancelled.',
-        authAdminSetupSuccess: 'Admin PIN created. You can now login as admin.',
+        authAdminSetupRequiresUserPin: 'Admin password required to continue.',
+        authAdminSetupPrompt: 'Set a new Admin Password',
+        authAdminConfirmPrompt: 'Confirm Admin Password',
+        authAdminPinMustDiffer: 'Admin password must be different from your main password',
+        authAdminSetupCancelled: 'Admin password setup cancelled.',
+        authAdminSetupSuccess: 'Admin password created. You can now login as admin.',
         authTooManyAttempts: 'Too many failed attempts. Try again in 1 minute.',
         authNameRequired: 'Please enter your full name',
         authPhoneRequired: 'Please enter a valid phone number',
@@ -432,8 +450,8 @@ const translations = {
         authEmailInvalid: 'Please enter a valid email address',
         authPhoneExists: 'An account with this phone number already exists',
         authEmailExists: 'An account with this email already exists',
-        authPinRules: 'PIN must be exactly 5 digits',
-        authPinMismatch: 'PIN and confirmation PIN do not match',
+        authPinRules: 'Password must be at least 5 characters',
+        authPinMismatch: 'Passwords do not match',
         authVerificationCodeRequired: 'Please enter the verification code',
         authVerificationCodeInvalid: 'Verification code is incorrect',
         authVerificationCodeExpired: 'Verification code expired. Request a new code.',
@@ -453,7 +471,8 @@ const translations = {
         authAccountCreated: 'Account created successfully. You can now log in.',
         authUserNotFound: 'No account matches this phone number',
         authResetEmailMismatch: 'The email does not match this account',
-        authPinResetSuccess: 'PIN reset successfully. You can now log in.',
+        authPinResetSuccess: 'Password reset successfully. You can now log in.',
+        authAdminOnlyCreate: 'Only admin accounts can create new users.',
         loggedInAs: 'Logged in as',
         todaySales: "Today's Sales",
         todayProfit: "Today's Profit",
@@ -618,18 +637,18 @@ const translations = {
         adminPanel: 'Admin Panel',
         adminPanelTitle: 'Urubuga rw Ubuyobozi',
         adminPanelDescription: 'Shakisha abakozi, uhindure inshingano za konti, kandi ucunge abafite uburenganzira bwo gukoresha porogaramu.',
-        signUp: 'Iyandikishe',
+        signUp: 'Iyandikishe nka Admin',
         fullName: 'Amazina yuzuye',
         phoneOrEmail: 'Telefoni',
         emailAddress: 'Imeyili',
         phoneNumber: 'Nimero ya telefone',
-        pinLabel: 'PIN y imibare 5',
-        confirmPin: 'Emeza PIN',
+        pinLabel: 'Ijambobanga',
+        confirmPin: 'Emeza ijambobanga',
         accountType: 'Ubwoko bwa konti',
-        signupRoleStaff: 'Konti isanzwe',
+        signupRoleStaff: 'Konti y\'umukozi',
         signupRoleAdmin: 'Konti ya admin',
-        adminPinLabel: 'PIN ya admin (imibare 5)',
-        confirmAdminPin: 'Emeza PIN ya admin',
+        adminPinLabel: 'Ijambobanga rya admin',
+        confirmAdminPin: 'Emeza ijambobanga rya admin',
         createAccount: 'Fungura konti',
         continueWithGoogle: 'Komeza na Google',
         googleEmailPrompt: 'Andika imeyili ya Google',
@@ -640,26 +659,26 @@ const translations = {
         googleServiceUnavailable: 'Serivisi ya Google login ntabwo iboneka ubu.',
         verificationCode: 'Kode y\'iyemeza',
         sendCode: 'Ohereza kode',
-        forgotPin: 'Wibagiwe PIN?',
-        resetPin: 'Hindura PIN',
-        resetPinHint: 'Koresha telefoni yawe kugira ngo ushyireho PIN nshya.',
-        resetNewPin: 'PIN nshya y\'imibare 5',
-        resetConfirmPin: 'Emeza PIN nshya',
+        forgotPin: 'Wibagiwe ijambobanga?',
+        resetPin: 'Hindura ijambobanga',
+        resetPinHint: 'Koresha telefoni yawe kugira ngo ushyireho ijambobanga rishya.',
+        resetNewPin: 'Ijambobanga rishya',
+        resetConfirmPin: 'Emeza ijambobanga rishya',
         cancel: 'Siba',
         authHintLogin: 'Koresha konti yawe usanzwe ufite kugira ngo ukomeze.',
-        authHintAdmin: 'Admin yinjirana nimero ya telefone kandi ikoresha PIN ya admin itandukanye.',
-        authHintSignup: 'Banza ufungure konti kugira ngo urinde porogaramu.',
-        authHintReset: 'Hindura PIN ukoresheje nimero ya telefone wandikishijeho konti.',
-        authInvalidCredentials: 'Nimero ya telefone cyangwa PIN si byo',
+        authHintAdmin: 'Admin yinjirana nimero ya telefone n\'ijambobanga.',
+        authHintSignup: 'Iyandikishe nka admin gusa kugira ngo urinde porogaramu.',
+        authHintReset: 'Hindura ijambobanga ukoresheje nimero ya telefone wandikishijeho konti.',
+        authInvalidCredentials: 'Nimero ya telefone cyangwa ijambobanga si byo',
         authAccountInactive: 'Iyi konti ntikora. Vugana na nyiri porogaramu.',
-        authAdminInvalidCredentials: 'Nimero ya telefone ya admin cyangwa PIN ya admin si byo',
+        authAdminInvalidCredentials: 'Nimero ya telefone ya admin cyangwa ijambobanga si byo',
         authAdminAccessDenied: 'Iyi konti nta burenganzira bwa admin ifite',
-        authAdminSetupRequiresUserPin: 'Kugira ngo ushyireho PIN ya admin, banza winjize PIN yawe isanzwe.',
-        authAdminSetupPrompt: 'Shyiraho PIN nshya ya admin y imibare 5',
-        authAdminConfirmPrompt: 'Emeza PIN ya admin',
-        authAdminPinMustDiffer: 'PIN ya admin igomba kuba itandukanye na PIN isanzwe',
-        authAdminSetupCancelled: 'Gushyiraho PIN ya admin byahagaritswe.',
-        authAdminSetupSuccess: 'PIN ya admin yashyizweho. Ubu ushobora kwinjira nka admin.',
+        authAdminSetupRequiresUserPin: 'Ijambobanga rya admin rirakenewe kugira ngo ukomeze.',
+        authAdminSetupPrompt: 'Shyiraho ijambobanga rishya rya admin',
+        authAdminConfirmPrompt: 'Emeza ijambobanga rya admin',
+        authAdminPinMustDiffer: 'Ijambobanga rya admin rigomba kuba ritandukanye n\'iry\'ibanze',
+        authAdminSetupCancelled: 'Gushyiraho ijambobanga rya admin byahagaritswe.',
+        authAdminSetupSuccess: 'Ijambobanga rya admin ryashyizweho. Ubu ushobora kwinjira nka admin.',
         authTooManyAttempts: 'Wagerageje inshuro nyinshi. Ongera nyuma y umunota 1.',
         authNameRequired: 'Andika amazina yawe yuzuye',
         authPhoneRequired: 'Andika nimero ya telefone yemewe',
@@ -667,8 +686,8 @@ const translations = {
         authEmailInvalid: 'Andika imeyili yemewe',
         authPhoneExists: 'Iyi nimero isanzwe ifite konti',
         authEmailExists: 'Iyi imeyili isanzwe ifite konti',
-        authPinRules: 'PIN igomba kuba imibare 5',
-        authPinMismatch: 'PIN na PIN yo kwemeza ntibihura',
+        authPinRules: 'Ijambobanga rigomba kuba nibura inyuguti 5',
+        authPinMismatch: 'Ijambobanga n\'iryemeza ntibihura',
         authVerificationCodeRequired: 'Andika kode y\'iyemeza',
         authVerificationCodeInvalid: 'Kode y\'iyemeza si yo',
         authVerificationCodeExpired: 'Kode yararangiye. Saba indi kode.',
@@ -688,7 +707,8 @@ const translations = {
         authAccountCreated: 'Konti yakozwe neza. Ubu ushobora kwinjira.',
         authUserNotFound: 'Nta konti ifite iyi nimero ya telefone',
         authResetEmailMismatch: 'Imeyili ntabwo ihuye n\'iyi konti',
-        authPinResetSuccess: 'PIN yahinduwe neza. Ubu ushobora kwinjira.',
+        authPinResetSuccess: 'Ijambobanga ryahinduwe neza. Ubu ushobora kwinjira.',
+        authAdminOnlyCreate: 'Konti za admin ni zo zonyine zishobora gukora konti nshya.',
         loggedInAs: 'Uwinjiye',
         todaySales: "Igurisha ry'uyu munsi",
         todayProfit: "Inyungu y'uyu munsi",
@@ -853,18 +873,18 @@ adminLogin: 'Connexion Admin',
 adminPanel: 'Panneau Admin',
 adminPanelTitle: 'Panneau d’administration',
 adminPanelDescription: 'Rechercher des employés, modifier les rôles des comptes et gérer les autorisations d’accès à l’application.',
-signUp: 'S’inscrire',
+signUp: 'Inscription Admin',
 fullName: 'Nom complet',
 phoneOrEmail: 'Téléphone',
 emailAddress: 'Adresse email',
 phoneNumber: 'Numéro de téléphone',
-pinLabel: 'PIN à 5 chiffres',
-confirmPin: 'Confirmer le PIN',
+pinLabel: 'Mot de passe',
+confirmPin: 'Confirmer le mot de passe',
 accountType: 'Type de compte',
 signupRoleStaff: 'Compte employe',
 signupRoleAdmin: 'Compte admin',
-adminPinLabel: 'PIN admin (5 chiffres)',
-confirmAdminPin: 'Confirmer le PIN admin',
+adminPinLabel: 'Mot de passe admin',
+confirmAdminPin: 'Confirmer le mot de passe admin',
 createAccount: 'Créer un compte',
 continueWithGoogle: 'Continuer avec Google',
 googleEmailPrompt: 'Entrez l’email Google',
@@ -875,26 +895,26 @@ googleLoginFailed: 'La connexion avec Google a échoué. Veuillez réessayer.',
 googleServiceUnavailable: 'Le service de connexion Google est actuellement indisponible.',
 verificationCode: 'Code de vérification',
 sendCode: 'Envoyer le code',
-forgotPin: 'PIN oublié ?',
-resetPin: 'Réinitialiser le PIN',
-resetPinHint: 'Utilisez votre numéro de téléphone pour définir un nouveau PIN.',
-resetNewPin: 'Nouveau PIN à 5 chiffres',
-resetConfirmPin: 'Confirmer le nouveau PIN',
+forgotPin: 'Mot de passe oublié ?',
+resetPin: 'Réinitialiser le mot de passe',
+resetPinHint: 'Utilisez votre numéro de téléphone pour définir un nouveau mot de passe.',
+resetNewPin: 'Nouveau mot de passe',
+resetConfirmPin: 'Confirmer le nouveau mot de passe',
 cancel: 'Annuler',
 authHintLogin: 'Utilisez votre compte existant pour continuer.',
-authHintAdmin: 'L’admin utilise votre numéro de téléphone avec un PIN admin différent.',
-authHintSignup: 'Créez d’abord un compte pour sécuriser l’application.',
-authHintReset: 'Réinitialisez le PIN avec votre numéro de téléphone enregistré.',
-authInvalidCredentials: 'Numéro de téléphone ou PIN incorrect',
+authHintAdmin: 'L’admin utilise votre numéro de téléphone et votre mot de passe.',
+authHintSignup: 'Inscription admin uniquement pour sécuriser l’application.',
+authHintReset: 'Réinitialisez le mot de passe avec votre numéro de téléphone enregistré.',
+authInvalidCredentials: 'Numéro de téléphone ou mot de passe incorrect',
 authAccountInactive: 'Ce compte est inactif. Contactez le propriétaire de l’application.',
-authAdminInvalidCredentials: 'Numéro de téléphone admin ou PIN admin incorrect',
+authAdminInvalidCredentials: 'Numéro de téléphone admin ou mot de passe incorrect',
 authAdminAccessDenied: 'Ce compte n’a pas les droits administrateur',
-authAdminSetupRequiresUserPin: 'Pour configurer le PIN admin, entrez d’abord votre PIN utilisateur.',
-authAdminSetupPrompt: 'Définissez un nouveau PIN admin à 5 chiffres',
-authAdminConfirmPrompt: 'Confirmez le PIN admin',
-authAdminPinMustDiffer: 'Le PIN admin doit être différent du PIN utilisateur',
-authAdminSetupCancelled: 'Configuration du PIN admin annulée.',
-authAdminSetupSuccess: 'PIN admin configuré. Vous pouvez maintenant vous connecter en tant qu’admin.',
+authAdminSetupRequiresUserPin: 'Mot de passe admin requis pour continuer.',
+authAdminSetupPrompt: 'Définissez un nouveau mot de passe admin',
+authAdminConfirmPrompt: 'Confirmez le mot de passe admin',
+authAdminPinMustDiffer: 'Le mot de passe admin doit être différent du mot de passe principal',
+authAdminSetupCancelled: 'Configuration du mot de passe admin annulée.',
+authAdminSetupSuccess: 'Mot de passe admin configuré. Vous pouvez maintenant vous connecter en tant qu’admin.',
 authTooManyAttempts: 'Trop de tentatives. Réessayez après 1 minute.',
 authNameRequired: 'Entrez votre nom complet',
 authPhoneRequired: 'Entrez un numéro de téléphone valide',
@@ -902,8 +922,8 @@ authEmailRequired: 'Entrez votre email',
 authEmailInvalid: 'Entrez un email valide',
 authPhoneExists: 'Ce numéro possède déjà un compte',
 authEmailExists: 'Cet email possède déjà un compte',
-authPinRules: 'Le PIN doit contenir 5 chiffres',
-authPinMismatch: 'Les PIN ne correspondent pas',
+authPinRules: 'Le mot de passe doit contenir au moins 5 caractères',
+authPinMismatch: 'Les mots de passe ne correspondent pas',
 authVerificationCodeRequired: 'Entrez le code de vérification',
 authVerificationCodeInvalid: 'Code de vérification incorrect',
 authVerificationCodeExpired: 'Code expiré. Demandez-en un nouveau.',
@@ -923,7 +943,8 @@ authEmailConfigIncomplete: 'Configuration email incomplète.',
 authAccountCreated: 'Compte créé avec succès. Vous pouvez maintenant vous connecter.',
 authUserNotFound: 'Aucun compte trouvé avec ce numéro',
 authResetEmailMismatch: 'L’email ne correspond pas à ce compte',
-authPinResetSuccess: 'PIN réinitialisé avec succès. Vous pouvez maintenant vous connecter.',
+authPinResetSuccess: 'Mot de passe réinitialisé avec succès. Vous pouvez maintenant vous connecter.',
+authAdminOnlyCreate: 'Seuls les comptes admin peuvent créer de nouveaux utilisateurs.',
 loggedInAs: 'Connecté en tant que',
 todaySales: "Ventes d’aujourd’hui",
 todayProfit: "Bénéfice d’aujourd’hui",
@@ -1148,6 +1169,63 @@ async function optimizedSaveData() {
     });
 }
 
+function getAutoBackupDateKey(date = new Date()) {
+    return date.toISOString().slice(0, 10);
+}
+
+function getAutoBackupStateKey(user = activeUser) {
+    const id = getUserStorageId(user);
+    return id ? `auto_backup_last__${id}` : '';
+}
+
+function getAutoBackupStorageKey(user = activeUser, date = new Date()) {
+    const id = getUserStorageId(user);
+    return id ? `auto_backup__${id}__${getAutoBackupDateKey(date)}` : '';
+}
+
+async function runAutoBackupForUser(user = activeUser, date = new Date()) {
+    if (!user) return false;
+    const backupKey = getAutoBackupStorageKey(user, date);
+    if (!backupKey) return false;
+
+    const dayKey = getAutoBackupDateKey(date);
+    const stateKey = getAutoBackupStateKey(user);
+    if (stateKey) {
+        const lastBackup = readLocalStorageKey(stateKey);
+        if (lastBackup === dayKey) return false;
+    }
+
+    await waitForPendingSave();
+    const payload = buildCurrentSavePayload(user);
+    await saveNamedData(backupKey, payload);
+    if (stateKey) {
+        writeLocalStorageKey(stateKey, dayKey);
+    }
+    return true;
+}
+
+function scheduleAutoBackup() {
+    if (autoBackupTimeout) {
+        clearTimeout(autoBackupTimeout);
+        autoBackupTimeout = null;
+    }
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(AUTO_BACKUP_HOUR, 0, 0, 0);
+    if (next <= now) {
+        next.setDate(next.getDate() + 1);
+    }
+    const delay = Math.max(1000, next.getTime() - now.getTime());
+    autoBackupTimeout = setTimeout(async () => {
+        try {
+            await runAutoBackupForUser(activeUser, new Date());
+        } catch (error) {
+            console.warn('Auto backup failed:', error);
+        }
+        scheduleAutoBackup();
+    }, delay);
+}
+
 // ================= ELECTRON + WEB STORAGE =================
 const APP_META_STORAGE_KEY = 'app_meta';
 
@@ -1237,6 +1315,12 @@ function getDefaultLowStockThreshold() {
     return 5;
 }
 
+const DEFAULT_NEW_STOCK_QTY = 30;
+
+function getDefaultNewDrinkStockQty() {
+    return DEFAULT_NEW_STOCK_QTY;
+}
+
 function normalizeStockValue(value, fallback = 0) {
     const parsed = Math.floor(Number(value));
     if (!Number.isFinite(parsed) || parsed < 0) return Math.max(0, Math.floor(Number(fallback) || 0));
@@ -1312,7 +1396,7 @@ function sanitizeDrinkEntry(raw) {
         Object.prototype.hasOwnProperty.call(raw, 'quantityOnHand');
     const parsedStockQty = normalizeStockValue(
         raw.stockQty ?? raw.stock ?? raw.quantityOnHand,
-        hasLegacyStockValue ? 0 : 30
+        hasLegacyStockValue ? 0 : 0
     );
     const parsedLowStockThreshold = normalizeStockValue(
         raw.lowStockThreshold ?? raw.lowStockLimit ?? raw.reorderLevel,
@@ -1337,6 +1421,13 @@ function normalizeDrinksData() {
         return;
     }
     drinks = drinks
+        .map((drink) => sanitizeDrinkEntry(drink))
+        .filter(Boolean);
+}
+
+function normalizeDrinksList(list) {
+    if (!Array.isArray(list)) return [];
+    return list
         .map((drink) => sanitizeDrinkEntry(drink))
         .filter(Boolean);
 }
@@ -1743,6 +1834,126 @@ function normalizePhone(phone) {
     return String(phone || '').replace(/\D/g, '');
 }
 
+const PASSWORD_MIN_LENGTH = 5;
+const PASSWORD_HASH_PREFIX = 'pbkdf2';
+const PASSWORD_HASH_ITERATIONS = 120000;
+const PASSWORD_SALT_BYTES = 16;
+
+function normalizePasswordInput(value) {
+    return String(value || '').trim();
+}
+
+function isPasswordValid(value) {
+    return normalizePasswordInput(value).length >= PASSWORD_MIN_LENGTH;
+}
+
+function hasWebCrypto() {
+    return typeof window !== 'undefined' && window.crypto && window.crypto.subtle;
+}
+
+function bufferToBase64(buffer) {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    let binary = '';
+    bytes.forEach((byte) => {
+        binary += String.fromCharCode(byte);
+    });
+    return btoa(binary);
+}
+
+function base64ToBuffer(base64) {
+    const binary = atob(base64 || '');
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+}
+
+function safeEqualStrings(a, b) {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i += 1) {
+        diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return diff === 0;
+}
+
+async function hashPassword(password, options = {}) {
+    if (!hasWebCrypto()) {
+        throw new Error('Secure password hashing is not available.');
+    }
+    const normalized = normalizePasswordInput(password);
+    if (!isPasswordValid(normalized)) {
+        throw new Error(t('authPinRules'));
+    }
+    const saltBytes = options.salt
+        ? base64ToBuffer(options.salt)
+        : window.crypto.getRandomValues(new Uint8Array(PASSWORD_SALT_BYTES));
+    const iterations = Number(options.iterations) || PASSWORD_HASH_ITERATIONS;
+    const encoder = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+        'raw',
+        encoder.encode(normalized),
+        { name: 'PBKDF2' },
+        false,
+        ['deriveBits']
+    );
+    const derivedBits = await window.crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt: saltBytes, iterations, hash: 'SHA-256' },
+        keyMaterial,
+        256
+    );
+    const saltEncoded = bufferToBase64(saltBytes);
+    const hashEncoded = bufferToBase64(derivedBits);
+    return `${PASSWORD_HASH_PREFIX}$${iterations}$${saltEncoded}$${hashEncoded}`;
+}
+
+async function verifyPassword(password, storedHash) {
+    if (!hasWebCrypto()) return false;
+    const normalized = normalizePasswordInput(password);
+    if (!normalized || !storedHash) return false;
+    const parts = String(storedHash || '').split('$');
+    if (parts.length !== 4 || parts[0] !== PASSWORD_HASH_PREFIX) return false;
+    const iterations = Number(parts[1]);
+    const salt = parts[2];
+    const expectedHash = parts[3];
+    if (!Number.isFinite(iterations) || !salt || !expectedHash) return false;
+    try {
+        const computed = await hashPassword(normalized, { iterations, salt });
+        const computedHash = computed.split('$')[3] || '';
+        return safeEqualStrings(computedHash, expectedHash);
+    } catch (_) {
+        return false;
+    }
+}
+
+async function verifyUserPassword(user, password) {
+    if (!user) return false;
+    const normalized = normalizePasswordInput(password);
+    if (!normalized) return false;
+    if (user.passwordHash) {
+        return verifyPassword(normalized, user.passwordHash);
+    }
+
+    const legacyPin = String(user.pin || '').trim();
+    const legacyAdminPin = String(user.adminPin || '').trim();
+    const matchesLegacy = (legacyPin && normalized === legacyPin) || (legacyAdminPin && normalized === legacyAdminPin);
+    if (!matchesLegacy) return false;
+
+    try {
+        user.passwordHash = await hashPassword(normalized);
+        delete user.pin;
+        delete user.adminPin;
+        user.authProvider = 'password';
+        user.updatedAt = new Date().toISOString();
+        appMeta.authUsers = getAuthUsers();
+        await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+    } catch (error) {
+        console.warn('Password migration failed:', error);
+    }
+    return true;
+}
+
 function findUserByLoginIdentifier(identifierValue, users = getAuthUsers()) {
     const raw = String(identifierValue || '').trim();
     if (!raw) return null;
@@ -1762,6 +1973,7 @@ function isOwnerRoleUser(user) {
 
 function normalizeAuthRole(roleValue, fallback = 'staff') {
     const normalized = String(roleValue || '').trim().toLowerCase();
+    if (normalized === 'employee') return 'staff';
     if (normalized === 'owner' || normalized === 'admin' || normalized === 'staff') return normalized;
     return fallback;
 }
@@ -1855,20 +2067,8 @@ async function handleAdminLogin(identifier, pin, users = getAuthUsers()) {
         alert(t('authAdminAccessDenied'));
         return;
     }
-
-    let adminPin = String(user.adminPin || '').trim();
-    if (!/^\d{5}$/.test(adminPin)) {
-        const setupResult = await setupAdminPinForUser(user, pin);
-        if (!setupResult.success) {
-            if (!setupResult.cancelled) {
-                alert(setupResult.message || t('authAdminInvalidCredentials'));
-            }
-            return;
-        }
-        adminPin = String(user.adminPin || '').trim();
-    }
-
-    if (adminPin !== pin) {
+    const passwordOk = await verifyUserPassword(user, pin);
+    if (!passwordOk) {
         registerFailedLoginAttempt('authAdminInvalidCredentials');
         return;
     }
@@ -1894,6 +2094,7 @@ async function completeLoginForUser(user, options = {}) {
     updateActiveUserBadge();
     refreshAdminAccessUI();
     refreshDataManagementAccessUI();
+    scheduleAutoBackup();
     const startPage = String(options?.startPage || '').trim() || 'home';
     showWelcomeAnimation(startPage);
 }
@@ -1910,7 +2111,8 @@ function normalizeAuthUsersData() {
             return {
                 ...user,
                 role: normalizedRole,
-                isActive: user.isActive !== false
+                isActive: user.isActive !== false,
+                authProvider: user.authProvider || 'password'
             };
         });
 }
@@ -1970,6 +2172,7 @@ async function restoreActiveSessionFromMeta() {
     updateActiveUserBadge();
     refreshAdminAccessUI();
     refreshDataManagementAccessUI();
+    scheduleAutoBackup();
 
     const loginScreen = document.getElementById('loginScreen');
     const app = document.getElementById('app');
@@ -2016,9 +2219,7 @@ function updateSignupAdminPinVisibility() {
     const adminPinConfirmGroup = document.getElementById('signupAdminPinConfirmGroup');
     const adminPinInput = document.getElementById('signupAdminPin');
     const adminPinConfirmInput = document.getElementById('signupAdminPinConfirm');
-    const users = getAuthUsers();
-    const canPickRole = Array.isArray(users) && users.length > 0;
-    const showAdminPin = authMode === 'signup' && canPickRole && roleSelect && roleSelect.value === 'admin';
+    const showAdminPin = false;
 
     if (adminPinGroup) adminPinGroup.style.display = showAdminPin ? 'block' : 'none';
     if (adminPinConfirmGroup) adminPinConfirmGroup.style.display = showAdminPin ? 'block' : 'none';
@@ -2032,17 +2233,8 @@ function updateSignupAdminPinVisibility() {
 function syncSignupRoleControls(users = getAuthUsers()) {
     const roleGroup = document.getElementById('signupRoleGroup');
     const roleSelect = document.getElementById('signupRole');
-    const canPickRole = Array.isArray(users) && users.length > 0;
-    const shouldShowRole = authMode === 'signup' && canPickRole;
-
-    if (roleGroup) roleGroup.style.display = shouldShowRole ? 'block' : 'none';
-    if (roleSelect) {
-        if (!canPickRole) {
-            roleSelect.value = 'staff';
-        } else if (roleSelect.value !== 'admin' && roleSelect.value !== 'staff') {
-            roleSelect.value = 'staff';
-        }
-    }
+    if (roleGroup) roleGroup.style.display = 'none';
+    if (roleSelect) roleSelect.value = 'admin';
 
     updateSignupAdminPinVisibility();
 }
@@ -2082,7 +2274,10 @@ function toggleForgotPinPanel(show) {
 }
 
 function switchAuthMode(mode) {
-    if (mode === 'signup' || mode === 'admin') {
+    const allowSignup = Array.isArray(getAuthUsers()) && getAuthUsers().length === 0;
+    if (mode === 'signup' && !allowSignup) {
+        authMode = 'login';
+    } else if (mode === 'signup' || mode === 'admin') {
         authMode = mode;
     } else {
         authMode = 'login';
@@ -2246,7 +2441,7 @@ async function handleLogin() {
     const pin = (pinInput ? pinInput.value : '').trim();
     const users = getAuthUsers();
 
-    if (!/^\d{5}$/.test(pin)) {
+    if (!isPasswordValid(pin)) {
         alert(t('authPinRules'));
         return;
     }
@@ -2257,8 +2452,8 @@ async function handleLogin() {
     }
 
     const user = findUserByLoginIdentifier(loginIdentifier, users);
-
-    if (!user || String(user.pin) !== pin) {
+    const passwordOk = await verifyUserPassword(user, pin);
+    if (!user || !passwordOk) {
         registerFailedLoginAttempt('authInvalidCredentials');
         return;
     }
@@ -2292,7 +2487,7 @@ async function handleSignup() {
         alert(t('authPhoneRequired'));
         return;
     }
-    if (!/^\d{5}$/.test(pin)) {
+    if (!isPasswordValid(pin)) {
         alert(t('authPinRules'));
         return;
     }
@@ -2302,35 +2497,22 @@ async function handleSignup() {
     }
 
     const users = getAuthUsers();
+    if (users.length > 0) {
+        alert(t('authAdminOnlyCreate'));
+        return;
+    }
     const phoneExists = users.some((u) => normalizePhone(u.phone) === phone);
     if (phoneExists) {
         alert(t('authPhoneExists'));
         return;
     }
-
-    const requestedRole = users.length === 0
-        ? 'owner'
-        : (signupRoleSelect && signupRoleSelect.value === 'admin' ? 'admin' : 'staff');
-
-    const adminPin = (signupAdminPinInput ? signupAdminPinInput.value : '').trim();
-    const confirmAdminPin = (signupAdminPinConfirmInput ? signupAdminPinConfirmInput.value : '').trim();
-    if (requestedRole === 'admin') {
-        if (!/^\d{5}$/.test(adminPin)) {
-            alert(t('authPinRules'));
-            return;
-        }
-        if (!/^\d{5}$/.test(confirmAdminPin)) {
-            alert(t('authPinRules'));
-            return;
-        }
-        if (adminPin !== confirmAdminPin) {
-            alert(t('authPinMismatch'));
-            return;
-        }
-        if (adminPin === pin) {
-            alert(t('authAdminPinMustDiffer'));
-            return;
-        }
+    const requestedRole = 'owner';
+    let passwordHash = '';
+    try {
+        passwordHash = await hashPassword(pin);
+    } catch (error) {
+        alert(error.message || 'Unable to secure this password.');
+        return;
     }
 
     const createdUser = {
@@ -2338,11 +2520,11 @@ async function handleSignup() {
         name,
         email: '',
         phone,
-        pin,
+        passwordHash,
         role: requestedRole,
-        adminPin: requestedRole === 'admin' ? adminPin : '',
         isActive: true,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        authProvider: 'password'
     };
     users.push(createdUser);
 
@@ -2353,7 +2535,7 @@ async function handleSignup() {
 
     if (confirmInput) confirmInput.value = '';
     if (pinInput) pinInput.value = '';
-    if (signupRoleSelect) signupRoleSelect.value = 'staff';
+    if (signupRoleSelect) signupRoleSelect.value = 'admin';
     if (signupAdminPinInput) signupAdminPinInput.value = '';
     if (signupAdminPinConfirmInput) signupAdminPinConfirmInput.value = '';
     updateSignupAdminPinVisibility();
@@ -2381,7 +2563,7 @@ async function handleResetPin() {
         alert(t('authPhoneRequired'));
         return;
     }
-    if (!/^\d{5}$/.test(newPin)) {
+    if (!isPasswordValid(newPin)) {
         alert(t('authPinRules'));
         return;
     }
@@ -2396,11 +2578,19 @@ async function handleResetPin() {
         return;
     }
 
-    user.pin = newPin;
-    user.updatedAt = new Date().toISOString();
-    appMeta.authUsers = users;
-    appMeta.lastLoginPhone = phone;
-    await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+    try {
+        user.passwordHash = await hashPassword(newPin);
+        delete user.pin;
+        delete user.adminPin;
+        user.authProvider = 'password';
+        user.updatedAt = new Date().toISOString();
+        appMeta.authUsers = users;
+        appMeta.lastLoginPhone = phone;
+        await saveNamedData(APP_META_STORAGE_KEY, appMeta);
+    } catch (error) {
+        alert(error.message || 'Unable to reset password.');
+        return;
+    }
 
     toggleForgotPinPanel(false);
 
@@ -2428,6 +2618,11 @@ function initializeAuthUI() {
     const resetPinBtn = document.getElementById('resetPinBtn');
     const cancelResetPinBtn = document.getElementById('cancelResetPinBtn');
     const resetConfirmPinInput = document.getElementById('resetConfirmPin');
+
+    const canPublicSignup = Array.isArray(users) && users.length === 0;
+    if (signupTab) {
+        signupTab.style.display = canPublicSignup ? 'inline-flex' : 'none';
+    }
 
     if (loginTab && !loginTab.dataset.bound) {
         loginTab.addEventListener('click', () => switchAuthMode('login'));
@@ -2591,6 +2786,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     bindOnboardingControls();
     ensureStockAdjustOverlayBindings();
     ensureClearDataConfirmBindings();
+    initializeAiAssistant();
+    scheduleAutoBackup();
     
     const logoutBtn = document.getElementById('logoutBtn');
     
@@ -2620,6 +2817,8 @@ document.addEventListener('DOMContentLoaded', async function() {
             updateActiveUserBadge();
             refreshAdminAccessUI();
             refreshDataManagementAccessUI();
+            closeAiAssistantPanel();
+            refreshAiAssistantAccessUI();
             closeOnboarding(false);
 
             document.getElementById('app').style.display = 'none';
@@ -2640,7 +2839,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             const resetNewPin = document.getElementById('resetNewPin');
             const resetConfirmPin = document.getElementById('resetConfirmPin');
             if (signupName) signupName.value = '';
-            if (signupRole) signupRole.value = 'staff';
+            if (signupRole) signupRole.value = 'admin';
             if (signupAdminPin) signupAdminPin.value = '';
             if (signupAdminPinConfirm) signupAdminPinConfirm.value = '';
             if (confirmPin) confirmPin.value = '';
@@ -3153,6 +3352,7 @@ function refreshAdminAccessUI() {
 
     setReportsPageModeForRole();
     refreshProfitVisibilityUI();
+    refreshAiAssistantAccessUI();
 }
 
 function setReportsPageModeForRole() {
@@ -3206,9 +3406,17 @@ function refreshDataManagementAccessUI() {
     const clearBtn = document.getElementById('clearUserDataBtn');
     const clearQuickBtn = document.getElementById('adminClearDataQuickBtn');
     const warningText = document.getElementById('clearWarningText');
+    const archivePanel = document.getElementById('archiveYearPanel');
     const archiveYearSelect = document.getElementById('archiveYearSelect');
     const archiveYearBtn = document.getElementById('archiveYearBtn');
+    const archiveYearInfo = document.getElementById('archiveYearInfo');
     const allowed = isAdminSessionActive();
+    const allowedYears = getArchiveAllowedYears();
+    const hasAllowedArchive = allowedYears.length > 0;
+
+    if (archivePanel) {
+        archivePanel.style.display = allowed ? 'block' : 'none';
+    }
 
     if (clearBtn) {
         clearBtn.disabled = !allowed;
@@ -3230,16 +3438,29 @@ function refreshDataManagementAccessUI() {
 
     if (archiveYearSelect) {
         const hasYearValue = Boolean(String(archiveYearSelect.value || '').trim());
-        archiveYearSelect.disabled = !allowed || !hasYearValue;
-        archiveYearSelect.style.opacity = (!allowed || !hasYearValue) ? '0.6' : '1';
+        const disabled = !allowed || !hasAllowedArchive || !hasYearValue;
+        archiveYearSelect.disabled = disabled;
+        archiveYearSelect.style.opacity = disabled ? '0.6' : '1';
     }
 
     if (archiveYearBtn) {
         const hasYearValue = Boolean(String(archiveYearSelect?.value || '').trim());
-        archiveYearBtn.disabled = !allowed || !hasYearValue;
-        archiveYearBtn.style.opacity = (!allowed || !hasYearValue) ? '0.55' : '1';
-        archiveYearBtn.style.cursor = (!allowed || !hasYearValue) ? 'not-allowed' : 'pointer';
+        const disabled = !allowed || !hasAllowedArchive || !hasYearValue;
+        archiveYearBtn.disabled = disabled;
+        archiveYearBtn.style.opacity = disabled ? '0.55' : '1';
+        archiveYearBtn.style.cursor = disabled ? 'not-allowed' : 'pointer';
         archiveYearBtn.title = !allowed ? t('clearDataRequiresAdminLogin') : '';
+    }
+
+    if (archiveYearInfo) {
+        if (!allowed) {
+            archiveYearInfo.textContent = t('clearDataRequiresAdminLogin');
+        } else if (!hasAllowedArchive) {
+            const nextYear = new Date().getFullYear() + 1;
+            archiveYearInfo.textContent = `Archive opens after Jan 1, ${nextYear}.`;
+        } else {
+            archiveYearInfo.textContent = 'Moves selected year sales and deposit records into archive and removes them from active workspace.';
+        }
     }
 }
 
@@ -3274,18 +3495,29 @@ function getArchiveCandidateYears() {
     return Array.from(years).sort((a, b) => b - a);
 }
 
+function getArchiveAllowedYears(referenceDate = new Date()) {
+    const currentYear = referenceDate.getFullYear();
+    return getArchiveCandidateYears().filter((year) => Number(year) < currentYear);
+}
+
+function isArchiveAllowedForYear(year, referenceDate = new Date()) {
+    const currentYear = referenceDate.getFullYear();
+    return Number.isFinite(Number(year)) && Number(year) < currentYear;
+}
+
 function renderArchiveYearOptions() {
     const select = document.getElementById('archiveYearSelect');
     if (!select) return;
 
-    const years = getArchiveCandidateYears();
+    const years = getArchiveAllowedYears();
     const previousValue = String(select.value || '').trim();
     select.innerHTML = '';
 
     if (!years.length) {
         const option = document.createElement('option');
         option.value = '';
-        option.textContent = 'No year available';
+        const nextYear = new Date().getFullYear() + 1;
+        option.textContent = `Archive available after Jan 1, ${nextYear}`;
         select.appendChild(option);
         select.disabled = true;
         return;
@@ -3315,6 +3547,10 @@ async function archiveSelectedYear() {
     const selectedYear = Number(select ? select.value : '');
     if (!Number.isFinite(selectedYear)) {
         alert('Please choose a valid year to archive.');
+        return;
+    }
+    if (!isArchiveAllowedForYear(selectedYear)) {
+        alert('Archive is only available after the year ends.');
         return;
     }
 
@@ -3370,12 +3606,12 @@ function normalizeUserRoleLabel(roleValue) {
     const role = normalizeAuthRole(roleValue, 'staff');
     if (role === 'owner') return 'Owner';
     if (role === 'admin') return 'Admin';
-    return 'Staff';
+    return 'Employee';
 }
 
 function getAuthProviderLabel(user) {
     const provider = String(user?.authProvider || '').trim().toLowerCase();
-    return provider === 'google' ? 'Google' : 'PIN';
+    return provider === 'google' ? 'Google' : 'Password';
 }
 
 function setAdminMainTab(tab, event) {
@@ -4948,12 +5184,12 @@ function exportAdminAllSalesPDF() {
     }
 }
 
-function exportAdminStockAuditPDF() {
+async function exportAdminStockAuditPDF() {
     if (!canAccessAdminPanel()) {
         alert('Only an active admin session can export stock audit PDF.');
         return;
     }
-    exportStockManagementPDF();
+    await exportStockManagementPDF();
 }
 
 function renderAdminPanel() {
@@ -4962,7 +5198,12 @@ function renderAdminPanel() {
     const privilegedEl = document.getElementById('adminSummaryPrivileged');
     const staffEl = document.getElementById('adminSummaryStaff');
     const inactiveEl = document.getElementById('adminSummaryInactive');
+    const createUserCard = document.getElementById('adminCreateUserCard');
     if (!body || !totalEl || !privilegedEl || !staffEl || !inactiveEl) return;
+
+    if (createUserCard) {
+        createUserCard.style.display = isAdminSessionActive() ? 'block' : 'none';
+    }
 
     configureDatePickers();
     renderAdminDailySalesSummary();
@@ -5013,10 +5254,10 @@ function renderAdminPanel() {
         const isSelf = getAuthSessionUserId(user) === activeId;
 
         const canResetPin = canManage || (!canManage && !isAdminRoleUser(user));
-        const canResetAdminPin = canManage && isAdminRoleUser(user);
         const canToggleRole = canManage && !isSelf;
         const canToggleStatus = canManage && !isSelf;
-        const roleToggleLabel = role === 'staff' ? 'Make Admin' : 'Make Staff';
+        const canClearEmployeeData = role === 'staff' && !isSelf;
+        const roleToggleLabel = role === 'staff' ? 'Make Admin' : 'Make Employee';
         const statusToggleLabel = isActive ? 'Deactivate' : 'Activate';
 
         const row = document.createElement('tr');
@@ -5033,8 +5274,8 @@ function renderAdminPanel() {
             <td>
                 <div class="admin-action-row">
                     <button class="admin-action-btn secondary" onclick="viewUserDataSnapshot(${index})">Data</button>
-                    <button class="admin-action-btn" onclick="adminResetUserPin(${index})" ${canResetPin ? '' : 'disabled'}>Reset PIN</button>
-                    <button class="admin-action-btn" onclick="adminResetUserAdminPin(${index})" ${canResetAdminPin ? '' : 'disabled'}>Reset Admin PIN</button>
+                    <button class="admin-action-btn" onclick="adminResetUserPin(${index})" ${canResetPin ? '' : 'disabled'}>Reset Password</button>
+                    <button class="admin-action-btn danger" onclick="clearEmployeeData(${index})" ${canClearEmployeeData ? '' : 'disabled'}>Clear Data</button>
                     <button class="admin-action-btn" onclick="toggleUserRole(${index})" ${canToggleRole ? '' : 'disabled'}>${roleToggleLabel}</button>
                     <button class="admin-action-btn danger" onclick="toggleUserActiveStatus(${index})" ${canToggleStatus ? '' : 'disabled'}>${statusToggleLabel}</button>
                 </div>
@@ -5042,6 +5283,84 @@ function renderAdminPanel() {
         `;
         body.appendChild(row);
     });
+}
+
+async function waitForPendingSave() {
+    if (!isSaving && !saveTimeout) return;
+    await new Promise((resolve) => {
+        const check = () => {
+            if (!isSaving && !saveTimeout) {
+                resolve();
+                return;
+            }
+            setTimeout(check, 50);
+        };
+        check();
+    });
+}
+
+async function createUserFromAdminPanel() {
+    if (!isAdminSessionActive()) {
+        alert('Only an active admin session can create user accounts.');
+        return;
+    }
+
+    const nameInput = document.getElementById('adminCreateUserName');
+    const phoneInput = document.getElementById('adminCreateUserPhone');
+    const passwordInput = document.getElementById('adminCreateUserPassword');
+    const roleSelect = document.getElementById('adminCreateUserRole');
+
+    const name = String(nameInput ? nameInput.value : '').trim();
+    const phone = normalizePhone(phoneInput ? phoneInput.value : '');
+    const password = String(passwordInput ? passwordInput.value : '').trim();
+    const roleValue = String(roleSelect ? roleSelect.value : '').trim().toLowerCase();
+    const role = roleValue === 'admin' ? 'admin' : 'staff';
+
+    if (phone.length < 10) {
+        alert(t('authPhoneRequired'));
+        return;
+    }
+    if (!isPasswordValid(password)) {
+        alert(t('authPinRules'));
+        return;
+    }
+
+    const users = getAuthUsers();
+    const phoneExists = users.some((user) => normalizePhone(user.phone) === phone);
+    if (phoneExists) {
+        alert(t('authPhoneExists'));
+        return;
+    }
+
+    let passwordHash = '';
+    try {
+        passwordHash = await hashPassword(password);
+    } catch (error) {
+        alert(error.message || 'Unable to secure this password.');
+        return;
+    }
+
+    const createdUser = {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        name: name || `User ${phone.slice(-4)}`,
+        email: '',
+        phone,
+        passwordHash,
+        role,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        authProvider: 'password'
+    };
+
+    users.push(createdUser);
+    appMeta.authUsers = users;
+    await initializeUserStorage({ id: createdUser.id, phone: createdUser.phone });
+    await saveAuthUsersWithFeedback(`Account created for ${createdUser.name || createdUser.phone}.`);
+
+    if (nameInput) nameInput.value = '';
+    if (phoneInput) phoneInput.value = '';
+    if (passwordInput) passwordInput.value = '';
+    if (roleSelect) roleSelect.value = 'staff';
 }
 
 async function saveAuthUsersWithFeedback(successMessage = '') {
@@ -5125,61 +5444,67 @@ async function adminResetUserPin(index) {
     const target = users[index];
     if (!target) return;
     if (!canManageAdminAccounts() && isAdminRoleUser(target)) {
-        alert('Only the owner can reset admin/owner PINs.');
+        alert('Only the owner can reset admin/owner passwords.');
         return;
     }
 
-    const pinRaw = window.prompt(`Set a new 5-digit PIN for ${target.name || 'this user'}:`, '');
+    const pinRaw = window.prompt(`Set a new password for ${target.name || 'this user'}:`, '');
     if (pinRaw === null) return;
-    const nextPin = String(pinRaw || '').trim();
-    if (!/^\d{5}$/.test(nextPin)) {
+    const nextPassword = String(pinRaw || '').trim();
+    if (!isPasswordValid(nextPassword)) {
         alert(t('authPinRules'));
         return;
     }
 
-    target.pin = nextPin;
-    target.updatedAt = new Date().toISOString();
-    appMeta.authUsers = users;
-    await saveAuthUsersWithFeedback(`PIN reset for ${target.name || 'user'}.`);
+    try {
+        target.passwordHash = await hashPassword(nextPassword);
+        delete target.pin;
+        delete target.adminPin;
+        target.authProvider = 'password';
+        target.updatedAt = new Date().toISOString();
+        appMeta.authUsers = users;
+        await saveAuthUsersWithFeedback(`Password reset for ${target.name || 'user'}.`);
+    } catch (error) {
+        alert(error.message || 'Unable to reset password.');
+    }
 }
 
-async function adminResetUserAdminPin(index) {
-    if (!canManageAdminAccounts()) {
-        alert('Only the owner can reset admin PINs.');
+async function clearEmployeeData(index) {
+    if (!isAdminSessionActive()) {
+        alert('Only an active admin session can clear employee data.');
         return;
     }
     const users = getAuthUsers();
     const target = users[index];
     if (!target) return;
-    if (!isAdminRoleUser(target)) {
-        alert('This user does not have admin privileges.');
+    if (getAuthSessionUserId(target) === getAuthSessionUserId(activeUser)) {
+        alert('You cannot clear your own data.');
         return;
     }
 
-    const pinRaw = window.prompt(`Set a new 5-digit Admin PIN for ${target.name || 'this user'}:`, '');
-    if (pinRaw === null) return;
-    const nextPin = String(pinRaw || '').trim();
-    if (!/^\d{5}$/.test(nextPin)) {
-        alert(t('authPinRules'));
-        return;
-    }
-    if (nextPin === String(target.pin || '').trim()) {
-        alert(t('authAdminPinMustDiffer'));
+    const role = normalizeAuthRole(target.role, 'staff');
+    if (role !== 'staff') {
+        alert('Only employee accounts can be cleared.');
         return;
     }
 
-    const confirmRaw = window.prompt('Confirm the new Admin PIN:', '');
-    if (confirmRaw === null) return;
-    const confirmPin = String(confirmRaw || '').trim();
-    if (confirmPin !== nextPin) {
-        alert(t('authPinMismatch'));
-        return;
-    }
+    const nameLabel = target.name || target.phone || 'this employee';
+    const confirmed = await showUiConfirm({
+        title: 'Clear Employee Data',
+        message: `This will permanently delete ${nameLabel}'s sales, customers, deposits, stock, settings, and archives. Continue?`,
+        confirmText: 'Clear Data',
+        cancelText: 'Cancel'
+    });
+    if (!confirmed) return;
 
-    target.adminPin = nextPin;
-    target.updatedAt = new Date().toISOString();
-    appMeta.authUsers = users;
-    await saveAuthUsersWithFeedback(`Admin PIN reset for ${target.name || 'user'}.`);
+    await waitForPendingSave();
+    await initializeUserStorage(target);
+    showSuccessToast(`Data cleared for ${nameLabel}.`);
+}
+
+async function adminResetUserAdminPin(index) {
+    void index;
+    alert('Admin accounts use the same password as normal login. Use Reset Password instead.');
 }
 
 async function viewUserDataSnapshot(index) {
@@ -5212,11 +5537,13 @@ async function viewUserDataSnapshot(index) {
     const userClates = Array.isArray(loaded[clatesKey]) ? loaded[clatesKey] : [];
     const userDrinks = Array.isArray(loaded[drinksKey]) ? loaded[drinksKey] : [];
     const totalSalesAmount = userSales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const hasPassword = Boolean(String(target.passwordHash || target.pin || target.adminPin || '').trim());
 
     alert(
         `Employer: ${target.name || 'User'}\n` +
         `Role: ${normalizeUserRoleLabel(target.role)}\n` +
         `Status: ${isUserAccountActive(target) ? 'Active' : 'Inactive'}\n\n` +
+        `Password set: ${hasPassword ? 'Yes' : 'No'}\n` +
         `Sales records: ${userSales.length}\n` +
         `Sales total: RWF ${totalSalesAmount.toLocaleString()}\n` +
         `Customers: ${userCustomers.length}\n` +
@@ -5236,7 +5563,7 @@ function getAdminExportUserRows() {
         provider: getAuthProviderLabel(user),
         createdAt: formatAppDateTime(user.createdAt, 'Unknown'),
         lastLoginAt: formatAppDateTime(user.lastLoginAt, 'Never'),
-        hasAdminPin: Boolean(String(user.adminPin || '').trim())
+        hasPassword: Boolean(String(user.passwordHash || user.pin || user.adminPin || '').trim())
     }));
 }
 
@@ -5282,13 +5609,13 @@ function exportAdminUsersPDF() {
             String(row.status),
             String(row.provider),
             String(row.lastLoginAt),
-            row.hasAdminPin ? 'Yes' : 'No'
+            row.hasPassword ? 'Yes' : 'No'
         ]);
 
         if (typeof doc.autoTable === 'function') {
             doc.autoTable({
                 startY: y,
-                head: [['Name', 'Phone', 'Email', 'Role', 'Status', 'Provider', 'Last Login', 'Admin PIN']],
+                head: [['Name', 'Phone', 'Email', 'Role', 'Status', 'Provider', 'Last Login', 'Password Set']],
                 body: tableBody,
                 theme: 'grid',
                 styles: { fontSize: 8.2, cellPadding: 2.1 },
@@ -5847,10 +6174,26 @@ async function applyStockAdjustment(index, direction, qtyInputValue = null, note
     return true;
 }
 
-function exportStockManagementPDF() {
+async function getPersistedDrinksSnapshot() {
+    if (!activeUser) {
+        return normalizeDrinksList(drinks);
+    }
+    const drinksKey = userDataKey('drinks', activeUser);
+    if (!drinksKey) return normalizeDrinksList(drinks);
+    const stored = await loadNamedData(drinksKey, Array.isArray(drinks) ? drinks : []);
+    return normalizeDrinksList(stored);
+}
+
+function getLowStockDrinksFromList(drinksList) {
+    return drinksList.filter((drink) => getDrinkStockStatus(drink) !== 'ok');
+}
+
+async function exportStockManagementPDF() {
     try {
-        normalizeDrinksData();
-        if (!drinks.length) {
+        await optimizedSaveData();
+        await waitForPendingSave();
+        const exportDrinks = await getPersistedDrinksSnapshot();
+        if (!exportDrinks.length) {
             alert('No stock data to export.');
             return;
         }
@@ -5860,7 +6203,7 @@ function exportStockManagementPDF() {
         let y = applyPdfBrandHeader(doc, reportTitle);
         const margin = 14;
 
-        const lowStock = getLowStockDrinks();
+        const lowStock = getLowStockDrinksFromList(exportDrinks);
         const outOfStock = lowStock.filter((drink) => getDrinkStockStatus(drink) === 'out');
 
         doc.setFont('helvetica', 'bold');
@@ -5872,14 +6215,14 @@ function exportStockManagementPDF() {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(10);
         doc.setTextColor(0, 0, 0);
-        doc.text(`Total Drinks: ${drinks.length}`, margin, y);
+        doc.text(`Total Drinks: ${exportDrinks.length}`, margin, y);
         doc.text(`Low Stock: ${lowStock.filter((drink) => getDrinkStockStatus(drink) === 'low').length}`, margin + 58, y);
         doc.text(`Out of Stock: ${outOfStock.length}`, margin + 108, y);
         y += 7;
         doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y);
         y += 6;
 
-        const tableRows = drinks.map((drink) => [
+        const tableRows = exportDrinks.map((drink) => [
             String(drink.name || ''),
             `RWF ${Number(drink.price || 0).toLocaleString()}`,
             String(getDrinkStockQty(drink)),
@@ -5909,7 +6252,7 @@ function exportStockManagementPDF() {
         }
 
         const stockHistoryEntries = [];
-        drinks.forEach((drink) => {
+        exportDrinks.forEach((drink) => {
             const drinkName = String(drink.name || '');
             const history = getDrinkStockHistory(drink);
             history.forEach((entry) => {
@@ -6527,9 +6870,11 @@ function saveNewDrink() {
     const finalProfitPerCase = canEditProfit
         ? (rawProfitValue === '' ? defaultProfit : parsedProfitValue)
         : defaultProfit;
+    const isNewDrink = existingIndex < 0;
+    const stockFallback = isNewDrink ? getDefaultNewDrinkStockQty() : getDrinkStockQty(existingDrink);
     const finalStockQty = rawStockValue === ''
-        ? getDrinkStockQty(existingDrink)
-        : normalizeStockValue(parsedStockValue, 0);
+        ? stockFallback
+        : normalizeStockValue(parsedStockValue, stockFallback);
     const finalLowStockThreshold = rawLowStockValue === ''
         ? getDrinkLowStockThreshold(existingDrink)
         : normalizeStockValue(parsedLowStockValue, getDefaultLowStockThreshold());
@@ -7259,6 +7604,7 @@ function updateHome() {
     }
 
     renderHomeStockWarning();
+    refreshAiAssistantInsights();
 }
 
 function getProfitConfig() {
@@ -9560,28 +9906,20 @@ function displaySalesHistory() {
 }
 
 // Delete an entire transaction by array of sale ids
-function requireAdminPasswordForAction(actionLabel = 'continue') {
+async function requireAdminPasswordForAction(actionLabel = 'continue') {
     if (!isAdminSessionActive()) {
         alert(t('clearDataRequiresAdminLogin'));
         return false;
     }
-
-    const configuredAdminPin = String(activeUser?.adminPin || '').trim();
-    if (!/^\d{5}$/.test(configuredAdminPin)) {
-        alert(t('authAdminAccessDenied'));
-        return false;
-    }
-
     const input = window.prompt(`Enter admin password to ${actionLabel}:`, '');
     if (input === null) return false;
-
-    const enteredPin = String(input || '').trim();
-    if (!/^\d{5}$/.test(enteredPin)) {
+    const enteredPassword = String(input || '').trim();
+    if (!isPasswordValid(enteredPassword)) {
         alert(t('authPinRules'));
         return false;
     }
-
-    if (enteredPin !== configuredAdminPin) {
+    const ok = await verifyUserPassword(activeUser, enteredPassword);
+    if (!ok) {
         alert(t('authAdminInvalidCredentials'));
         return false;
     }
@@ -9595,7 +9933,7 @@ async function deleteTransaction(ids) {
     }
     
     if (!confirm('Delete this transaction and all its items? This cannot be undone.')) return;
-    if (!requireAdminPasswordForAction('delete this transaction')) return;
+    if (!(await requireAdminPasswordForAction('delete this transaction'))) return;
 
     // Remove matching sales and adjust customer owing if needed
     ids.forEach(id => {
@@ -9875,7 +10213,7 @@ async function deleteSale(index) {
     if (index < 0 || index >= sales.length) return;
     
     if (confirm('Are you sure you want to delete this sale? This action cannot be undone.')) {
-        if (!requireAdminPasswordForAction('delete this sale')) return;
+        if (!(await requireAdminPasswordForAction('delete this sale'))) return;
         const deletedSale = sales[index];
         
         // If it was a credit sale, reduce customer's debt
@@ -10217,7 +10555,7 @@ function loadSettings() {
     }
     const addDrinkStockInput = document.getElementById('newDrinkStockQty');
     if (addDrinkStockInput && !addDrinkStockInput.value) {
-        addDrinkStockInput.value = '0';
+        addDrinkStockInput.value = String(getDefaultNewDrinkStockQty());
     }
     const addDrinkLowStockInput = document.getElementById('newDrinkLowStockThreshold');
     if (addDrinkLowStockInput && !addDrinkLowStockInput.value) {
@@ -10303,6 +10641,9 @@ function setAppLanguage(languageCode) {
     currentLanguage = normalizedLanguage;
     document.documentElement.lang = normalizedLanguage;
     updateLanguageUI();
+    if (typeof updateAiAssistantVoiceLanguage === 'function') {
+        updateAiAssistantVoiceLanguage();
+    }
 }
 
 function onLanguageChange(event) {
@@ -10322,6 +10663,7 @@ function saveCurrencyAndLanguage() {
     setAppLanguage(language);
     optimizedSaveData();
     showSuccessToast('Settings saved. Language and currency updated.');
+    refreshAiAssistantInsights();
 }
 
 // Translation helper function
@@ -10814,6 +11156,7 @@ window.saveDrinkProfitsFromSettings = saveDrinkProfitsFromSettings;
 window.setTheme = setTheme;
 window.saveCurrencyAndLanguage = saveCurrencyAndLanguage;
 window.clearAllData = clearAllData;
+window.clearEmployeeData = clearEmployeeData;
 window.archiveSelectedYear = archiveSelectedYear;
 window.openClearDataConfirmForm = openClearDataConfirmForm;
 window.closeClearDataConfirmForm = closeClearDataConfirmForm;
@@ -10823,6 +11166,888 @@ window.filterDrinks = filterDrinks;
 window.updateLanguageUI = updateLanguageUI;
 window.setStockFilter = setStockFilter;
 window.renderStockManagement = renderStockManagement;
+// ================= AI ASSISTANT =================
+function getAiAssistantCurrencySymbol() {
+    const raw = String(settings?.currency || 'RWF').trim();
+    return raw || 'RWF';
+}
+
+function formatAiCurrency(value) {
+    const symbol = getAiAssistantCurrencySymbol();
+    const amount = Math.round(Number(value) || 0);
+    return `${symbol} ${amount.toLocaleString()}`;
+}
+
+function clampNumber(value, min, max) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return min;
+    return Math.min(max, Math.max(min, num));
+}
+
+function getAiAssistantDateRange(days, endDate = new Date()) {
+    const safeDays = Math.max(1, Number(days) || 1);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    const start = new Date(endDate);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (safeDays - 1));
+    return { start, end, windowDays: safeDays };
+}
+
+function getSalesWithinRange(start, end) {
+    return (Array.isArray(sales) ? sales : []).filter((sale) => {
+        const dt = getSaleDateTimeOrNull(sale);
+        return dt && dt >= start && dt <= end;
+    });
+}
+
+function getSalesWindowStats(days, endDate = new Date()) {
+    const { start, end, windowDays } = getAiAssistantDateRange(days, endDate);
+    const list = getSalesWithinRange(start, end);
+    const productStats = new Map();
+
+    list.forEach((sale) => {
+        const name = String(sale.drinkName || 'Unknown').trim() || 'Unknown';
+        const qty = Number(sale.quantity) || 0;
+        const total = Number(sale.total) || 0;
+        const saleDate = getSaleDateTimeOrNull(sale);
+        if (!productStats.has(name)) {
+            productStats.set(name, { name, qty: 0, total: 0, lastSaleAt: null });
+        }
+        const entry = productStats.get(name);
+        entry.qty += qty;
+        entry.total += total;
+        if (saleDate && (!entry.lastSaleAt || saleDate > entry.lastSaleAt)) {
+            entry.lastSaleAt = saleDate;
+        }
+    });
+
+    const totalSales = list.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const totalQty = list.reduce((sum, sale) => sum + (Number(sale.quantity) || 0), 0);
+
+    return {
+        windowDays,
+        start,
+        end,
+        list,
+        productStats,
+        totalSales,
+        totalQty,
+        totalTransactions: list.length
+    };
+}
+
+function getTopProductsFromStats(productStats, limit = 3) {
+    return Array.from(productStats.values())
+        .sort((a, b) => b.qty - a.qty)
+        .slice(0, limit);
+}
+
+function getDaysSince(dateValue) {
+    if (!dateValue || Number.isNaN(new Date(dateValue).getTime())) return Number.POSITIVE_INFINITY;
+    const now = new Date();
+    const diffMs = now - new Date(dateValue);
+    return Math.max(0, Math.round(diffMs / 86400000));
+}
+
+function getSlowProducts(productStats, windowDays = AI_ASSISTANT_SLOW_WINDOW_DAYS, limit = 3) {
+    const list = (Array.isArray(drinks) ? drinks : []).map((drink) => {
+        const name = String(drink?.name || '').trim();
+        const stats = productStats.get(name) || { qty: 0, total: 0, lastSaleAt: null };
+        const daysSinceSale = getDaysSince(stats.lastSaleAt);
+        return {
+            name: name || 'Unknown',
+            qty: Number(stats.qty) || 0,
+            total: Number(stats.total) || 0,
+            daysSinceSale,
+            stockQty: getDrinkStockQty(drink)
+        };
+    });
+
+    return list
+        .filter((item) => item.qty <= 1 || item.daysSinceSale >= windowDays)
+        .sort((a, b) => {
+            if (b.daysSinceSale !== a.daysSinceSale) return b.daysSinceSale - a.daysSinceSale;
+            return a.qty - b.qty;
+        })
+        .slice(0, limit);
+}
+
+function buildRestockForecast(stats30, stats7, growthAnalysis) {
+    const weekendLift = Number(growthAnalysis?.weekendLiftPercent) || 0;
+    const weekendAdjust = weekendLift > 0 ? (1 + Math.min(weekendLift, 30) / 100 * 0.2) : 1;
+    const restockAll = (Array.isArray(drinks) ? drinks : []).map((drink) => {
+        const name = String(drink?.name || '').trim() || 'Unknown';
+        const stockQty = getDrinkStockQty(drink);
+        const stats30Entry = stats30.productStats.get(name) || { qty: 0 };
+        const stats7Entry = stats7.productStats.get(name) || { qty: 0 };
+        const avg30 = (Number(stats30Entry.qty) || 0) / Math.max(1, stats30.windowDays);
+        const avg7 = (Number(stats7Entry.qty) || 0) / Math.max(1, stats7.windowDays);
+        const avgDaily = Math.max(avg30, avg7) * weekendAdjust;
+        const daysRemaining = avgDaily > 0
+            ? stockQty / avgDaily
+            : (stockQty <= 0 ? 0 : Number.POSITIVE_INFINITY);
+        return {
+            name,
+            stockQty,
+            avgDaily,
+            daysRemaining,
+            status: getDrinkStockStatus(drink),
+            lowThreshold: getDrinkLowStockThreshold(drink)
+        };
+    });
+
+    const restockAlerts = restockAll
+        .filter((item) => item.status !== 'ok' || (Number.isFinite(item.daysRemaining) && item.daysRemaining <= 7))
+        .sort((a, b) => {
+            const aDays = Number.isFinite(a.daysRemaining) ? a.daysRemaining : Number.POSITIVE_INFINITY;
+            const bDays = Number.isFinite(b.daysRemaining) ? b.daysRemaining : Number.POSITIVE_INFINITY;
+            if (aDays !== bDays) return aDays - bDays;
+            return a.stockQty - b.stockQty;
+        });
+
+    return { restockAlerts, restockAll };
+}
+
+function formatDaysRemaining(days) {
+    if (!Number.isFinite(days)) return 'No recent sales';
+    if (days <= 0) return 'Out now';
+    if (days < 1) return 'Less than 1 day';
+    return `${Math.ceil(days)} days`;
+}
+
+function getProfitTrendStats(days = 7) {
+    if (!canViewProfitData()) {
+        return { allowed: false, currentProfit: 0, previousProfit: 0, delta: 0, deltaPercent: 0 };
+    }
+    const now = new Date();
+    const { start: currentStart, end: currentEnd } = getAiAssistantDateRange(days, now);
+    const prevEnd = new Date(currentStart);
+    prevEnd.setDate(prevEnd.getDate() - 1);
+    const { start: prevStart, end: prevRangeEnd } = getAiAssistantDateRange(days, prevEnd);
+
+    const currentSales = getSalesWithinRange(currentStart, currentEnd);
+    const previousSales = getSalesWithinRange(prevStart, prevRangeEnd);
+    const currentProfit = calculateProfitFromSales(currentSales);
+    const previousProfit = calculateProfitFromSales(previousSales);
+    const delta = currentProfit - previousProfit;
+    const deltaPercent = previousProfit > 0 ? (delta / previousProfit) * 100 : (currentProfit > 0 ? 100 : 0);
+
+    return { allowed: true, currentProfit, previousProfit, delta, deltaPercent };
+}
+
+function getCustomerInsights(salesList, limit = 3) {
+    const customerStats = new Map();
+    (Array.isArray(salesList) ? salesList : []).forEach((sale) => {
+        if (sale.customerId === null || sale.customerId === undefined) return;
+        const key = String(sale.customerId);
+        if (!customerStats.has(key)) {
+            customerStats.set(key, { count: 0, total: 0, customerId: sale.customerId });
+        }
+        const entry = customerStats.get(key);
+        entry.count += 1;
+        entry.total += Number(sale.total) || 0;
+    });
+
+    const topCustomers = Array.from(customerStats.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, limit)
+        .map((entry) => ({
+            name: typeof getSafeCustomerName === 'function' ? getSafeCustomerName(entry.customerId) : `Customer ${entry.customerId}`,
+            count: entry.count,
+            total: entry.total
+        }));
+
+    return { topCustomers };
+}
+
+function buildBusinessHealthScore(context) {
+    const totalDrinks = Array.isArray(drinks) ? drinks.length : 0;
+    const lowStockCount = getLowStockDrinks().length;
+    const stockScore = totalDrinks > 0 ? ((totalDrinks - lowStockCount) / totalDrinks) * 100 : 50;
+
+    const growthPercent = Number(context?.growthAnalysis?.growthPercent) || 0;
+    const salesScore = clampNumber(50 + (growthPercent / 25) * 50, 0, 100);
+
+    const movementScore = totalDrinks > 0
+        ? ((context?.productsSoldCount || 0) / totalDrinks) * 100
+        : 50;
+
+    const profitTrend = context?.profitTrend;
+    const profitScore = profitTrend && profitTrend.allowed
+        ? clampNumber(50 + (Number(profitTrend.deltaPercent) / 25) * 50, 0, 100)
+        : null;
+
+    const components = [salesScore, stockScore, movementScore];
+    if (profitScore !== null) components.push(profitScore);
+    const score = components.length
+        ? Math.round(components.reduce((sum, item) => sum + item, 0) / components.length)
+        : 50;
+
+    const notes = [];
+    if (Number.isFinite(salesScore)) {
+        notes.push(salesScore >= 70 ? 'Strong sales performance' : (salesScore <= 40 ? 'Sales need attention' : 'Sales are stable'));
+    }
+    if (lowStockCount > 0) {
+        notes.push(`${lowStockCount} item(s) low or out of stock`);
+    } else if (totalDrinks > 0) {
+        notes.push('Stock levels look healthy');
+    }
+    if (movementScore < 45 && totalDrinks > 0) {
+        notes.push('Several products are not moving');
+    }
+    if (profitScore !== null) {
+        notes.push(profitScore >= 65 ? 'Profit trend is positive' : 'Profit trend is slipping');
+    }
+    if (!notes.length) {
+        notes.push('No activity yet. Add sales to unlock insights.');
+    }
+
+    return { score, notes: notes.slice(0, 4) };
+}
+
+function buildDailySummary(stats30, restockAlerts, slowProducts, topProducts) {
+    const todayIso = getTodayISODate();
+    const todaySales = getSalesForSpecificDay(todayIso);
+    const totalSales = todaySales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    const todayTotals = new Map();
+    todaySales.forEach((sale) => {
+        const name = String(sale.drinkName || 'Unknown').trim() || 'Unknown';
+        todayTotals.set(name, (todayTotals.get(name) || 0) + (Number(sale.quantity) || 0));
+    });
+    const todayBest = Array.from(todayTotals.entries()).sort((a, b) => b[1] - a[1])[0];
+    const bestProduct = todayBest ? todayBest[0] : (topProducts[0]?.name || '--');
+    const slowProduct = slowProducts[0]?.name || '--';
+
+    let recommendation = 'Log more sales today to unlock recommendations.';
+    if (restockAlerts.length > 0) {
+        const urgent = restockAlerts[0];
+        recommendation = `${urgent.name} may run out in ${formatDaysRemaining(urgent.daysRemaining)}. Consider ordering more.`;
+    } else if (bestProduct && bestProduct !== '--') {
+        recommendation = `Keep ${bestProduct} visible and stocked to maintain momentum.`;
+    }
+
+    return {
+        dateLabel: new Date().toLocaleDateString(),
+        totalSales,
+        bestProduct,
+        slowProduct,
+        recommendation
+    };
+}
+
+function buildProfitLeakDetections(stats30, slowProducts) {
+    const leaks = [];
+    if (slowProducts.length > 0) {
+        const slow = slowProducts[0];
+        leaks.push(`${slow.name} has ${slow.stockQty} cases but only ${slow.qty} sold in ${stats30.windowDays} days. Consider reducing stock or bundling.`);
+    }
+
+    const profitCfg = getProfitConfig();
+    if (canViewProfitData() && profitCfg.mode === 'perCase') {
+        const lowMargin = (Array.isArray(drinks) ? drinks : [])
+            .map((drink) => {
+                const price = Number(drink.price) || 0;
+                const profit = getDrinkProfitPerCaseByName(drink.name);
+                const margin = price > 0 ? profit / price : 0;
+                return { name: drink.name, margin, profit, price };
+            })
+            .filter((item) => item.margin > 0 && item.margin < 0.08)
+            .sort((a, b) => a.margin - b.margin)[0];
+        if (lowMargin && lowMargin.name) {
+            leaks.push(`${lowMargin.name} margin is ${(lowMargin.margin * 100).toFixed(1)}%. Consider a small price lift or supplier renegotiation.`);
+        }
+    } else if (canViewProfitData() && profitCfg.mode === 'percentage' && profitCfg.percentage < 10) {
+        leaks.push(`Profit percentage is set to ${profitCfg.percentage}%. Review pricing or costs for better margin.`);
+    }
+
+    const idleStock = (Array.isArray(drinks) ? drinks : [])
+        .map((drink) => {
+            const stats = stats30.productStats.get(String(drink.name || '').trim()) || { lastSaleAt: null };
+            return { name: drink.name, daysSinceSale: getDaysSince(stats.lastSaleAt), stockQty: getDrinkStockQty(drink) };
+        })
+        .filter((item) => item.stockQty > 0 && item.daysSinceSale >= 45)
+        .sort((a, b) => b.daysSinceSale - a.daysSinceSale)[0];
+    if (idleStock && idleStock.name) {
+        leaks.push(`${idleStock.name} has been idle for ${idleStock.daysSinceSale} days. Consider a clearance or bundle offer.`);
+    }
+
+    return leaks.slice(0, 3);
+}
+
+function buildAiAssistantPriorities(context) {
+    const priorities = [];
+    const seen = new Set();
+    const add = (item) => {
+        if (!item || seen.has(item) || priorities.length >= AI_ASSISTANT_MAX_PRIORITIES) return;
+        priorities.push(item);
+        seen.add(item);
+    };
+
+    if (context.restockAlerts.length > 0) {
+        const urgent = context.restockAlerts[0];
+        add(`Restock ${urgent.name}`);
+        if (context.restockAlerts[1]) add(`Confirm supplier for ${context.restockAlerts[1].name}`);
+    }
+    if (context.slowProducts.length > 0) {
+        add(`Reduce or bundle ${context.slowProducts[0].name}`);
+    }
+    if (context.growthAnalysis?.topDebtFollowUp && Number(context.growthAnalysis.topDebtFollowUp.owing) > 0) {
+        add(`Follow up ${context.growthAnalysis.topDebtFollowUp.name} for ${formatAiCurrency(context.growthAnalysis.topDebtFollowUp.owing)}`);
+    }
+    if (context.profitTrend.allowed && context.profitTrend.deltaPercent < -5) {
+        add('Run a short promo to recover profit decline');
+    }
+    if (Number(context.growthAnalysis?.weekendLiftPercent) > 4) {
+        add('Prepare extra stock before the weekend');
+    }
+    if (context.growthAnalysis?.slowestWeekday?.name) {
+        add(`Plan a mid-week offer on ${context.growthAnalysis.slowestWeekday.name}`);
+    }
+    if (context.topProducts[0]?.name) {
+        add(`Feature ${context.topProducts[0].name} near checkout`);
+    }
+
+    return priorities;
+}
+
+function buildAiAssistantAnalysis() {
+    const stats30 = getSalesWindowStats(AI_ASSISTANT_RESTOCK_WINDOW_DAYS);
+    const stats7 = getSalesWindowStats(AI_ASSISTANT_FAST_WINDOW_DAYS);
+    const growthAnalysis = getAdminBusinessAnalysisData(AI_ASSISTANT_RESTOCK_WINDOW_DAYS);
+    const topProducts = getTopProductsFromStats(stats30.productStats, 3);
+    const slowProducts = getSlowProducts(stats30.productStats, AI_ASSISTANT_SLOW_WINDOW_DAYS, 3);
+    const restock = buildRestockForecast(stats30, stats7, growthAnalysis);
+    const profitTrend = getProfitTrendStats(7);
+    const customerInsights = getCustomerInsights(stats30.list, 3);
+    const productsSoldCount = stats30.productStats.size;
+    const healthScore = buildBusinessHealthScore({
+        growthAnalysis,
+        profitTrend,
+        productsSoldCount
+    });
+    const dailySummary = buildDailySummary(stats30, restock.restockAlerts, slowProducts, topProducts);
+    const profitLeaks = buildProfitLeakDetections(stats30, slowProducts);
+    const priorities = buildAiAssistantPriorities({
+        restockAlerts: restock.restockAlerts,
+        slowProducts,
+        growthAnalysis,
+        profitTrend,
+        topProducts
+    });
+
+    return {
+        generatedAt: new Date(),
+        windowDays: stats30.windowDays,
+        growthAnalysis,
+        stats30,
+        stats7,
+        topProducts,
+        slowProducts,
+        restockAlerts: restock.restockAlerts,
+        restockAll: restock.restockAll,
+        profitTrend,
+        customerInsights,
+        healthScore,
+        dailySummary,
+        profitLeaks,
+        priorities
+    };
+}
+
+function getAiAssistantAnalysis(force = false) {
+    const now = Date.now();
+    if (!force && aiAssistantState.cachedAnalysis && (now - aiAssistantState.cacheAt) < AI_ASSISTANT_CACHE_TTL_MS) {
+        return aiAssistantState.cachedAnalysis;
+    }
+    const analysis = buildAiAssistantAnalysis();
+    aiAssistantState.cachedAnalysis = analysis;
+    aiAssistantState.cacheAt = now;
+    return analysis;
+}
+
+function invalidateAiAssistantCache() {
+    aiAssistantState.cacheAt = 0;
+}
+
+function buildAiListItemsHtml(items, emptyText = 'No data yet.') {
+    if (!Array.isArray(items) || items.length === 0) {
+        return `<li>${escapeHtml(emptyText)}</li>`;
+    }
+    return items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+}
+
+function renderAiAssistantDashboard(force = false) {
+    const panel = document.getElementById('aiAssistantPanel');
+    if (!panel) return;
+    const analysis = getAiAssistantAnalysis(force);
+
+    const scoreValue = document.getElementById('aiHealthScoreValue');
+    const scoreLabel = document.getElementById('aiHealthScoreLabel');
+    const scoreNotes = document.getElementById('aiHealthScoreNotes');
+    const scoreWrap = document.querySelector('.ai-health-score');
+    if (scoreValue) scoreValue.textContent = String(analysis.healthScore.score);
+    if (scoreLabel) scoreLabel.textContent = `${analysis.healthScore.score}/100`;
+    if (scoreNotes) {
+        scoreNotes.innerHTML = buildAiListItemsHtml(analysis.healthScore.notes, 'No activity yet.');
+    }
+    if (scoreWrap) {
+        scoreWrap.classList.remove('good', 'warn', 'bad');
+        const scoreTone = analysis.healthScore.score >= 75
+            ? 'good'
+            : (analysis.healthScore.score >= 55 ? 'warn' : 'bad');
+        scoreWrap.classList.add(scoreTone);
+    }
+
+    const dailyDate = document.getElementById('aiDailyDate');
+    const dailyTotal = document.getElementById('aiDailyTotal');
+    const dailyBest = document.getElementById('aiDailyBest');
+    const dailySlow = document.getElementById('aiDailySlow');
+    const dailyRec = document.getElementById('aiDailyRecommendation');
+    if (dailyDate) dailyDate.textContent = analysis.dailySummary.dateLabel;
+    if (dailyTotal) dailyTotal.textContent = formatAiCurrency(analysis.dailySummary.totalSales);
+    if (dailyBest) dailyBest.textContent = analysis.dailySummary.bestProduct || '--';
+    if (dailySlow) dailySlow.textContent = analysis.dailySummary.slowProduct || '--';
+    if (dailyRec) dailyRec.textContent = analysis.dailySummary.recommendation;
+
+    const restockCount = document.getElementById('aiRestockCount');
+    const restockList = document.getElementById('aiRestockAlertsList');
+    if (restockCount) restockCount.textContent = String(analysis.restockAlerts.length);
+    if (restockList) {
+        const alerts = analysis.restockAlerts.slice(0, 5).map((item) => {
+            return `${item.name} - ${formatDaysRemaining(item.daysRemaining)} (${item.stockQty} cases)`;
+        });
+        restockList.innerHTML = buildAiListItemsHtml(alerts, 'All stock looks healthy.');
+    }
+
+    const leakCount = document.getElementById('aiLeakCount');
+    const leakList = document.getElementById('aiProfitLeakList');
+    if (leakCount) leakCount.textContent = String(canViewProfitData() ? analysis.profitLeaks.length : 0);
+    if (leakList) {
+        if (!canViewProfitData()) {
+            leakList.innerHTML = `<li>${escapeHtml('Profit insights require an admin session.')}</li>`;
+        } else {
+            leakList.innerHTML = buildAiListItemsHtml(analysis.profitLeaks, 'No obvious profit leaks detected.');
+        }
+    }
+
+    const prioritiesList = document.getElementById('aiPrioritiesList');
+    if (prioritiesList) {
+        const items = analysis.priorities.slice(0, AI_ASSISTANT_MAX_PRIORITIES);
+        prioritiesList.innerHTML = buildAiListItemsHtml(items, 'No urgent tasks today.');
+    }
+}
+
+function refreshAiAssistantInsights(force = false) {
+    invalidateAiAssistantCache();
+    if (aiAssistantState.isOpen) {
+        renderAiAssistantDashboard(force);
+    }
+}
+
+function addAiAssistantMessage(role, html, isHtml = true) {
+    const log = document.getElementById('aiAssistantChatLog');
+    if (!log) return;
+    const wrapper = document.createElement('div');
+    wrapper.className = `ai-message ${role === 'user' ? 'user' : 'ai'}`;
+    wrapper.innerHTML = isHtml ? html : escapeHtml(html);
+    log.appendChild(wrapper);
+    log.scrollTop = log.scrollHeight;
+}
+
+function addAiAssistantTyping() {
+    const log = document.getElementById('aiAssistantChatLog');
+    if (!log) return null;
+    const wrap = document.createElement('div');
+    wrap.className = 'ai-message ai ai-typing';
+    wrap.innerHTML = `
+        <span class="ai-typing-dot"></span>
+        <span class="ai-typing-dot"></span>
+        <span class="ai-typing-dot"></span>
+    `;
+    log.appendChild(wrap);
+    log.scrollTop = log.scrollHeight;
+    return wrap;
+}
+
+function buildAiBulletList(items) {
+    if (!Array.isArray(items) || items.length === 0) return '<p>No data yet.</p>';
+    return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+}
+
+function shouldUseExternalAdvice(query) {
+    return ['marketing', 'price', 'pricing', 'increase', 'grow', 'growth', 'promotion', 'strategy', 'advertise']
+        .some((term) => query.includes(term));
+}
+
+function getExternalAdviceConfig() {
+    const url = String(settings?.aiExternalAdviceUrl || appMeta?.aiExternalAdviceUrl || '').trim();
+    const apiKey = String(settings?.aiExternalAdviceKey || appMeta?.aiExternalAdviceKey || '').trim();
+    return { url, apiKey };
+}
+
+async function fetchExternalBusinessAdvice(question) {
+    const config = getExternalAdviceConfig();
+    if (!config.url) return null;
+
+    const cacheKey = question.toLowerCase();
+    const cachedAt = aiAssistantState.externalAdviceCacheAt[cacheKey];
+    if (cachedAt && (Date.now() - cachedAt) < 6 * 60 * 60 * 1000) {
+        return aiAssistantState.externalAdviceCache[cacheKey] || null;
+    }
+
+    try {
+        let payload = null;
+        if (config.url.includes('{query}')) {
+            const url = config.url.replace('{query}', encodeURIComponent(question));
+            payload = await fetchJsonWithTimeout(url, 7000);
+        } else {
+            const response = await fetch(config.url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {})
+                },
+                body: JSON.stringify({ question })
+            });
+            if (!response.ok) {
+                payload = null;
+            } else {
+                payload = await response.json();
+            }
+        }
+
+        const advice = typeof payload === 'string'
+            ? payload
+            : (payload?.advice || payload?.answer || payload?.message || (Array.isArray(payload?.tips) ? payload.tips.join(' ') : ''));
+
+        const cleaned = String(advice || '').trim();
+        if (!cleaned) return null;
+        aiAssistantState.externalAdviceCache[cacheKey] = cleaned;
+        aiAssistantState.externalAdviceCacheAt[cacheKey] = Date.now();
+        return cleaned;
+    } catch (error) {
+        return null;
+    }
+}
+
+async function generateAiAssistantResponse(prompt, analysis) {
+    const text = String(prompt || '').trim();
+    if (!text) {
+        return { html: '<p>Please type a question so I can help.</p>' };
+    }
+    const query = text.toLowerCase();
+
+    if (query.includes('restock') || query.includes('stock')) {
+        const alerts = analysis.restockAlerts.slice(0, 5);
+        if (!alerts.length) {
+            return { html: '<p>All stock levels look healthy right now.</p>' };
+        }
+        const lines = alerts.map((item) => `${item.name} - ${formatDaysRemaining(item.daysRemaining)} (${item.stockQty} cases)`);
+        return { html: `<p>Top restock alerts:</p>${buildAiBulletList(lines)}` };
+    }
+
+    if (query.includes('most') || query.includes('best') || query.includes('top')) {
+        const topProducts = analysis.topProducts;
+        if (!topProducts.length) {
+            return { html: '<p>No sales yet. Record sales to see top products.</p>' };
+        }
+        const lines = topProducts.map((item) => `${item.name} (${item.qty} cases)`);
+        return { html: `<p>Best sellers:</p>${buildAiBulletList(lines)}` };
+    }
+
+    if (query.includes('slow') || query.includes('not sell') || query.includes('unsold')) {
+        const slow = analysis.slowProducts;
+        if (!slow.length) {
+            return { html: '<p>No slow products detected in the last 30 days.</p>' };
+        }
+        const lines = slow.map((item) => `${item.name} - ${item.qty} case(s) in ${analysis.windowDays} days`);
+        return { html: `<p>Slow movers:</p>${buildAiBulletList(lines)}` };
+    }
+
+    if (query.includes('profit') || query.includes('margin') || query.includes('leak')) {
+        if (!analysis.profitTrend.allowed) {
+            const tips = [
+                'Keep best sellers fully stocked to protect revenue.',
+                'Bundle slow items with top sellers to move inventory.',
+                'Focus promotions on high-demand days to lift margin.'
+            ];
+            return {
+                html: `<p>General profit tips:</p>${buildAiBulletList(tips)}<p>Admin login unlocks profit numbers.</p>`
+            };
+        }
+        const trend = analysis.profitTrend;
+        const trendLine = `Profit is ${trend.delta >= 0 ? 'up' : 'down'} ${trend.delta >= 0 ? '+' : ''}${trend.deltaPercent.toFixed(1)}% vs last week.`;
+        const leaks = analysis.profitLeaks.length
+            ? buildAiBulletList(analysis.profitLeaks)
+            : '<p>No obvious profit leaks detected.</p>';
+        return { html: `<p>${escapeHtml(trendLine)}</p>${leaks}` };
+    }
+
+    if (query.includes('drop') || query.includes('decline') || query.includes('down')) {
+        const growth = Number(analysis.growthAnalysis?.growthPercent) || 0;
+        const line = growth >= 0
+            ? `Sales are up ${growth.toFixed(1)}% vs the previous ${analysis.windowDays} days.`
+            : `Sales are down ${Math.abs(growth).toFixed(1)}% vs the previous ${analysis.windowDays} days.`;
+        const suggestions = getBusinessAiAdvisorSuggestions(analysis.growthAnalysis).slice(0, 3);
+        const lines = suggestions.map((item) => `${item.title}: ${item.detail}`);
+        return { html: `<p>${escapeHtml(line)}</p>${buildAiBulletList(lines)}` };
+    }
+
+    if (query.includes('customer') || query.includes('loyal') || query.includes('frequent')) {
+        const topCustomers = analysis.customerInsights.topCustomers || [];
+        if (!topCustomers.length) {
+            return { html: '<p>No frequent buyers yet. Add customer-linked sales to see loyalty insights.</p>' };
+        }
+        const lines = topCustomers.map((item) => `${item.name} (${item.count} purchases)`);
+        return { html: `<p>Frequent buyers:</p>${buildAiBulletList(lines)}<p>Consider a small loyalty reward for top customers.</p>` };
+    }
+
+    if (query.includes('health')) {
+        const score = analysis.healthScore;
+        return { html: `<p>Business Health Score: <strong>${score.score}/100</strong></p>${buildAiBulletList(score.notes)}` };
+    }
+
+    if (query.includes('priority') || query.includes('today')) {
+        const priorities = analysis.priorities.slice(0, AI_ASSISTANT_MAX_PRIORITIES);
+        return { html: `<p>Top priorities for today:</p>${buildAiBulletList(priorities)}` };
+    }
+
+    if (query.includes('report') || query.includes('summary')) {
+        const summary = analysis.dailySummary;
+        return {
+            html: `<p>Today's Summary</p>${buildAiBulletList([
+                `Total sales: ${formatAiCurrency(summary.totalSales)}`,
+                `Best product: ${summary.bestProduct}`,
+                `Slow product: ${summary.slowProduct}`,
+                `Recommendation: ${summary.recommendation}`
+            ])}`
+        };
+    }
+
+    if (query.includes('analyze') || query.includes('insight') || query.includes('business')) {
+        const suggestions = getBusinessAiAdvisorSuggestions(analysis.growthAnalysis).slice(0, 4);
+        const lines = suggestions.map((item) => `${item.title}: ${item.detail}`);
+        return {
+            html: `<p>Here is the latest business snapshot:</p>${buildAiBulletList([
+                `Health score: ${analysis.healthScore.score}/100`,
+                `Top restock alert: ${analysis.restockAlerts[0]?.name || 'None'}`,
+                `Best seller: ${analysis.topProducts[0]?.name || 'No sales yet'}`
+            ])}${buildAiBulletList(lines)}`
+        };
+    }
+
+    let externalAdvice = null;
+    if (shouldUseExternalAdvice(query)) {
+        externalAdvice = await fetchExternalBusinessAdvice(text);
+    }
+
+    if (externalAdvice) {
+        return { html: `<p>${escapeHtml(externalAdvice)}</p>` };
+    }
+
+    return {
+        html: '<p>I can help with stock, sales, profit, and growth insights. Try a quick suggestion below.</p>'
+    };
+}
+
+async function handleAiAssistantPrompt(prompt) {
+    if (aiAssistantState.generating) return;
+    const input = document.getElementById('aiAssistantInput');
+    const text = String(prompt || input?.value || '').trim();
+    if (!text) return;
+    if (input) input.value = '';
+
+    aiAssistantState.generating = true;
+    addAiAssistantMessage('user', text, false);
+    const typing = addAiAssistantTyping();
+    try {
+        const analysis = getAiAssistantAnalysis();
+        const response = await generateAiAssistantResponse(text, analysis);
+        if (typing && typing.parentNode) typing.parentNode.removeChild(typing);
+        addAiAssistantMessage('ai', response.html || '<p>Unable to generate a response.</p>', true);
+    } catch (error) {
+        if (typing && typing.parentNode) typing.parentNode.removeChild(typing);
+        addAiAssistantMessage('ai', '<p>Sorry, I could not generate a response right now.</p>', true);
+    } finally {
+        aiAssistantState.generating = false;
+    }
+}
+
+function ensureAiAssistantGreeting() {
+    const log = document.getElementById('aiAssistantChatLog');
+    if (!log || log.children.length > 0) return;
+    addAiAssistantMessage('ai', '<p>Ask me about stock, sales, or growth. I can summarize your business in seconds.</p>');
+}
+
+function maybePostDailyReport(analysis) {
+    const todayKey = getTodayISODate();
+    if (aiAssistantState.lastDailyReportDate === todayKey) return;
+    aiAssistantState.lastDailyReportDate = todayKey;
+    const summary = analysis.dailySummary;
+    addAiAssistantMessage('ai', `<p>Today's Summary</p>${buildAiBulletList([
+        `Total sales: ${formatAiCurrency(summary.totalSales)}`,
+        `Best product: ${summary.bestProduct}`,
+        `Slow product: ${summary.slowProduct}`,
+        `Recommendation: ${summary.recommendation}`
+    ])}`);
+}
+
+function openAiAssistantPanel() {
+    const root = document.getElementById('aiAssistantRoot');
+    const panel = document.getElementById('aiAssistantPanel');
+    const backdrop = document.getElementById('aiAssistantBackdrop');
+    if (!panel) return;
+    panel.classList.add('open');
+    panel.setAttribute('aria-hidden', 'false');
+    if (backdrop) backdrop.classList.add('show');
+    if (root) root.classList.add('open');
+    aiAssistantState.isOpen = true;
+    renderAiAssistantDashboard(true);
+    ensureAiAssistantGreeting();
+    maybePostDailyReport(getAiAssistantAnalysis());
+    const input = document.getElementById('aiAssistantInput');
+    if (input) input.focus();
+}
+
+function closeAiAssistantPanel() {
+    const root = document.getElementById('aiAssistantRoot');
+    const panel = document.getElementById('aiAssistantPanel');
+    const backdrop = document.getElementById('aiAssistantBackdrop');
+    if (panel) {
+        panel.classList.remove('open');
+        panel.setAttribute('aria-hidden', 'true');
+    }
+    if (backdrop) backdrop.classList.remove('show');
+    if (root) root.classList.remove('open');
+    aiAssistantState.isOpen = false;
+    if (aiAssistantState.voiceRecognition && aiAssistantState.voiceActive) {
+        aiAssistantState.voiceRecognition.stop();
+    }
+}
+
+function toggleAiAssistantPanel() {
+    if (aiAssistantState.isOpen) {
+        closeAiAssistantPanel();
+    } else {
+        openAiAssistantPanel();
+    }
+}
+
+function updateAiAssistantVoiceLanguage() {
+    if (!aiAssistantState.voiceRecognition) return;
+    const localeMap = { en: 'en-US', fr: 'fr-FR', rw: 'rw-RW' };
+    aiAssistantState.voiceRecognition.lang = localeMap[currentLanguage] || 'en-US';
+}
+
+function initializeAiAssistantVoice() {
+    const voiceBtn = document.getElementById('aiAssistantVoice');
+    if (!voiceBtn) return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        voiceBtn.disabled = true;
+        voiceBtn.title = 'Voice input not supported';
+        return;
+    }
+
+    const recognizer = new SpeechRecognition();
+    recognizer.lang = 'en-US';
+    recognizer.interimResults = false;
+    recognizer.maxAlternatives = 1;
+    aiAssistantState.voiceRecognition = recognizer;
+    updateAiAssistantVoiceLanguage();
+
+    recognizer.onstart = () => {
+        aiAssistantState.voiceActive = true;
+        voiceBtn.classList.add('listening');
+    };
+    recognizer.onend = () => {
+        aiAssistantState.voiceActive = false;
+        voiceBtn.classList.remove('listening');
+    };
+    recognizer.onresult = (event) => {
+        const transcript = event.results?.[0]?.[0]?.transcript;
+        if (transcript) {
+            const input = document.getElementById('aiAssistantInput');
+            if (input) input.value = transcript;
+            void handleAiAssistantPrompt(transcript);
+        }
+    };
+
+    voiceBtn.addEventListener('click', () => {
+        if (!aiAssistantState.voiceRecognition) return;
+        if (aiAssistantState.voiceActive) {
+            aiAssistantState.voiceRecognition.stop();
+        } else {
+            updateAiAssistantVoiceLanguage();
+            aiAssistantState.voiceRecognition.start();
+        }
+    });
+}
+
+function initializeAiAssistant() {
+    const root = document.getElementById('aiAssistantRoot');
+    if (!root || root.dataset.bound) return;
+
+    const toggle = document.getElementById('aiAssistantToggle');
+    const closeBtn = document.getElementById('aiAssistantClose');
+    const refreshBtn = document.getElementById('aiAssistantRefresh');
+    const sendBtn = document.getElementById('aiAssistantSend');
+    const input = document.getElementById('aiAssistantInput');
+    const backdrop = document.getElementById('aiAssistantBackdrop');
+
+    if (toggle) toggle.addEventListener('click', toggleAiAssistantPanel);
+    if (closeBtn) closeBtn.addEventListener('click', closeAiAssistantPanel);
+    if (backdrop) backdrop.addEventListener('click', closeAiAssistantPanel);
+    if (refreshBtn) refreshBtn.addEventListener('click', () => renderAiAssistantDashboard(true));
+    if (sendBtn) sendBtn.addEventListener('click', () => handleAiAssistantPrompt());
+    if (input) {
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                handleAiAssistantPrompt();
+            }
+        });
+    }
+
+    document.querySelectorAll('.ai-command-btn, .ai-suggestion-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const prompt = btn.getAttribute('data-prompt') || btn.textContent || '';
+            handleAiAssistantPrompt(prompt);
+        });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && aiAssistantState.isOpen) {
+            closeAiAssistantPanel();
+        }
+    });
+
+    initializeAiAssistantVoice();
+    refreshAiAssistantAccessUI();
+    root.dataset.bound = '1';
+}
+
+function refreshAiAssistantAccessUI() {
+    const root = document.getElementById('aiAssistantRoot');
+    const backdrop = document.getElementById('aiAssistantBackdrop');
+    if (!root) return;
+    const allowed = Boolean(activeUser);
+    root.style.display = allowed ? 'block' : 'none';
+    if (backdrop) backdrop.style.display = allowed ? 'block' : 'none';
+    if (allowed) {
+        invalidateAiAssistantCache();
+    }
+    if (!allowed) {
+        aiAssistantState.cachedAnalysis = null;
+        aiAssistantState.cacheAt = 0;
+        aiAssistantState.lastDailyReportDate = '';
+        const log = document.getElementById('aiAssistantChatLog');
+        if (log) log.innerHTML = '';
+        closeAiAssistantPanel();
+    }
+}
+
 window.saveStockValues = saveStockValues;
 window.applyStockAdjustment = applyStockAdjustment;
 window.openStockAdjustForm = openStockAdjustForm;
@@ -10835,6 +12060,7 @@ window.setAdminSalesSubTab = setAdminSalesSubTab;
 window.setAdminStockFilter = setAdminStockFilter;
 window.renderAdminPanel = renderAdminPanel;
 window.renderAdminSalesStockManagement = renderAdminSalesStockManagement;
+window.createUserFromAdminPanel = createUserFromAdminPanel;
 window.toggleUserRole = toggleUserRole;
 window.toggleUserActiveStatus = toggleUserActiveStatus;
 window.adminResetUserPin = adminResetUserPin;
