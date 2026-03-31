@@ -2129,6 +2129,306 @@
             }
         }
 
+        /* ================= APP SHELL LAYOUT FIX ================= */
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #app {
+            display: grid;
+            grid-template-columns: 236px minmax(0, 1fr);
+            grid-template-rows: minmax(0, 1fr);
+            height: 100vh;
+            min-height: 100vh;
+            gap: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #app.sidebar-collapsed {
+            grid-template-columns: 82px minmax(0, 1fr);
+        }
+
+        #app > .top-bar,
+        #app > .nav-buttons,
+        #app > .page-container,
+        #app > .footer,
+        #app > #connectivityBanner {
+            width: auto;
+            margin: 0;
+        }
+
+        #app > .top-bar {
+            display: none !important;
+        }
+
+        #app > #connectivityBanner {
+            grid-column: 2;
+            grid-row: 1;
+            position: fixed;
+            top: 16px;
+            right: 18px;
+            left: calc(236px + 18px);
+            z-index: 32;
+            margin: 0;
+            border-radius: 20px;
+        }
+
+        #app.sidebar-collapsed > #connectivityBanner {
+            left: calc(82px + 18px);
+        }
+
+        #app > .nav-buttons {
+            grid-column: 1;
+            grid-row: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            width: 236px;
+            height: 100vh;
+            min-height: 100vh;
+            padding: 18px 12px 16px;
+            border-radius: 0;
+            position: relative;
+            top: 0;
+            border: none;
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            background: linear-gradient(180deg, #0f1a2b 0%, #0b1423 100%);
+            box-shadow: none;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        #app.sidebar-collapsed > .nav-buttons {
+            width: 82px;
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        #app .nav-group-main {
+            display: grid;
+            gap: 8px;
+            min-height: 0;
+        }
+
+        #app .nav-group-meta {
+            margin-top: auto;
+            display: grid;
+            gap: 12px;
+            width: 100%;
+            padding-top: 12px;
+            flex-shrink: 0;
+        }
+
+        #app .nav-btn,
+        #app .sidebar-footer-btn {
+            width: 100%;
+            justify-content: flex-start;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(132, 179, 224, 0.16);
+            background: rgba(255, 255, 255, 0.05);
+            color: #e4efff;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        #app .nav-btn:hover,
+        #app .sidebar-footer-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border-color: rgba(148, 210, 255, 0.28);
+        }
+
+        #app .nav-btn.active {
+            color: #101b2d;
+            background: linear-gradient(90deg, #ff9f1a 0%, #ffb11d 100%);
+            border-color: rgba(255, 185, 69, 0.18);
+            box-shadow: 0 14px 24px rgba(255, 159, 26, 0.28);
+        }
+
+        #app #sidebarSwitchBtn,
+        #app #sidebarCollapseBtn {
+            min-height: 48px;
+        }
+
+        #app #sidebarSwitchBtn {
+            background: linear-gradient(180deg, rgba(13, 38, 65, 0.92), rgba(11, 31, 53, 0.88));
+        }
+
+        #app #sidebarCollapseBtn {
+            background: linear-gradient(180deg, rgba(12, 33, 56, 0.86), rgba(9, 25, 44, 0.84));
+        }
+
+        #app .rw-clock,
+        #app .sidebar-account-card,
+        #app .sidebar-footer-btn {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            margin: 0;
+            box-sizing: border-box;
+        }
+
+        #app .nav-group-meta .rw-clock,
+        #app .nav-group-meta .sidebar-account-card,
+        #app .nav-group-meta .sidebar-footer-btn {
+            margin-left: 0;
+        }
+
+        #app .page-utility-bar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            display: flex;
+            justify-content: flex-end;
+            padding-bottom: 14px;
+            margin-bottom: 8px;
+            pointer-events: none;
+        }
+
+        #app .page-clock {
+            width: min(100%, 196px);
+            margin-left: auto;
+            pointer-events: auto;
+            border-color: rgba(102, 193, 255, 0.24);
+            background: linear-gradient(160deg, rgba(11, 27, 46, 0.94), rgba(7, 48, 81, 0.9));
+            box-shadow: 0 16px 30px rgba(4, 13, 26, 0.28);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+
+        #app .page-clock .rw-clock-day,
+        #app .page-clock .rw-clock-time {
+            color: #f2f8ff;
+        }
+
+        #app .page-clock .rw-clock-zone,
+        #app .page-clock .rw-clock-date {
+            color: rgba(213, 230, 247, 0.78);
+        }
+
+        #app.sidebar-collapsed #rwClock.page-clock {
+            padding: 14px;
+            text-align: left;
+        }
+
+        #app.sidebar-collapsed #rwClock.page-clock .rw-clock-head {
+            display: flex;
+        }
+
+        #app.sidebar-collapsed #rwClock.page-clock #rwClockDate {
+            display: block;
+        }
+
+        #app.sidebar-collapsed .nav-group-main {
+            padding-bottom: 0;
+        }
+
+        #app.sidebar-collapsed .nav-group-meta {
+            width: 100%;
+            padding-top: 10px;
+        }
+
+        #app.sidebar-collapsed .sidebar-footer-btn {
+            min-height: 48px;
+            padding: 12px;
+            justify-content: center;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(148, 210, 255, 0.24);
+        }
+
+        #app.sidebar-collapsed #sidebarCollapseBtn .nav-icon svg {
+            transform: rotate(180deg);
+        }
+
+        #app > .page-container {
+            grid-column: 2;
+            grid-row: 1;
+            height: 100vh;
+            min-height: 100vh;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding: 22px 24px 28px;
+            border-radius: 0;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+        }
+
+        #app > .footer {
+            display: none !important;
+        }
+
+        #app .page {
+            min-height: calc(100vh - 44px);
+        }
+
+        @media (max-width: 980px) {
+            #app,
+            #app.sidebar-collapsed {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+                height: auto;
+                min-height: 100vh;
+                overflow: visible;
+            }
+
+            #app > #connectivityBanner,
+            #app > .page-container {
+                grid-column: 1;
+            }
+
+            #app > .nav-buttons,
+            #app.sidebar-collapsed > .nav-buttons {
+                grid-column: 1;
+                grid-row: 1;
+                width: auto;
+                height: auto;
+                min-height: auto;
+                margin: 10px;
+                border-radius: 18px;
+                overflow: visible;
+                position: static;
+                border-right: none;
+            }
+
+            #app .nav-group-meta {
+                width: 100%;
+            }
+
+            #app .page-utility-bar {
+                position: static;
+                padding-bottom: 10px;
+                margin-bottom: 0;
+            }
+
+            #app .page-clock {
+                width: min(100%, 220px);
+            }
+
+            #app > #connectivityBanner,
+            #app.sidebar-collapsed > #connectivityBanner {
+                position: static;
+                left: auto;
+                right: auto;
+                top: auto;
+                margin: 0 10px 10px;
+            }
+
+            #app > .page-container {
+                grid-row: 2;
+                height: auto;
+                min-height: 0;
+                overflow: visible;
+                padding: 16px 14px 24px;
+            }
+        }
+
         /* ================= LOGIN REVAMP ================= */
         #loginScreen {
             background:
@@ -2427,6 +2727,10 @@
                     <input type="tel" id="resetPhone" placeholder="Enter your phone number" autocomplete="off">
                 </div>
                 <div class="input-group">
+                    <label for="resetVerificationCode">Verification Code</label>
+                    <input type="text" id="resetVerificationCode" maxlength="6" inputmode="numeric" placeholder="Enter reset code" autocomplete="one-time-code">
+                </div>
+                <div class="input-group">
                     <label for="resetNewPin">New Password</label>
                     <input type="password" id="resetNewPin" maxlength="64" placeholder="Enter new password" autocomplete="new-password">
                 </div>
@@ -2467,8 +2771,9 @@
         
         <div class="form-group" style="margin-bottom: 15px;">
             <label for="customerType" style="font-size: 0.9rem; margin-bottom: 5px;">Customer Type</label>
-            <select id="customerType" style="padding: 10px; font-size: 14px;">
+            <select id="customerType" style="padding: 10px; font-size: 14px;" onchange="syncCustomerPaybackDateVisibility()">
                 <option value="regular">Regular Customer</option>
+                <option value="loyal">Loyal Customer</option>
                 <option value="wholesale">Wholesale</option>
                 <option value="retail">Retail</option>
                 <option value="hotel">Hotel/Restaurant</option>
@@ -2484,6 +2789,12 @@
         <div class="form-group" style="margin-bottom: 20px;">
             <label for="customerDebt" style="font-size: 0.9rem; margin-bottom: 5px;">Initial Debt (RWF)</label>
             <input type="number" id="customerDebt" placeholder="Enter initial debt amount" value="0" style="padding: 10px; font-size: 14px;">
+        </div>
+
+        <div class="form-group" id="customerPaybackDateGroup" style="margin-bottom: 20px; display: none;">
+            <label for="customerPaybackDate" style="font-size: 0.9rem; margin-bottom: 5px;">Promised Payback Date</label>
+            <input type="date" id="customerPaybackDate" style="padding: 10px; font-size: 14px;" disabled>
+            <p style="margin-top: 8px; color: #64748b; font-size: 0.85rem;">Use this for loyal customers who promise to pay their debt on a specific date.</p>
         </div>
         
         <div class="form-buttons" style="margin-top: 20px; gap: 10px;">
@@ -2521,6 +2832,10 @@
         <div class="form-group">
             <label id="debtMessage">Enter amount:</label>
             <input type="number" id="debtAmount" placeholder="Enter amount (RWF)" required>
+        </div>
+        <div class="form-group" id="debtPromiseDateGroup" style="display: none;">
+            <label for="debtPromiseDate">Promised Payback Date</label>
+            <input type="date" id="debtPromiseDate" disabled>
         </div>
         <div class="form-buttons">
             <button onclick="closeDebtForm()" class="form-btn form-cancel">Cancel</button>
@@ -2578,11 +2893,14 @@
     
     <!-- Top Bar -->
     <div class="top-bar">
-        <img src="logo.png" alt="Logo" class="top-bar-logo">
-        <div class="logo">MAKE A WAY</div>
-        <div id="activeUserBadge" class="active-user-badge" style="display: none;"></div>
-        <button id="logoutBtn" class="logout-btn">Logout</button>
-        <button id="topSettingsBtn" class="top-settings-btn" type="button" onclick="showPage('settings')" title="Settings" aria-label="Settings">⚙</button>
+        <div class="top-bar-copy">
+            <span class="top-bar-eyebrow">Business Workspace</span>
+            <div class="logo">MAKE A WAY</div>
+        </div>
+        <div class="top-bar-actions">
+            <button id="topSettingsBtn" class="top-settings-btn" type="button" onclick="showPage('settings')" title="Settings" aria-label="Settings">Settings</button>
+            <button id="logoutBtn" class="logout-btn">Switch Account</button>
+        </div>
     </div>
     <div id="connectivityBanner" class="connectivity-banner" style="display: none;" aria-live="polite">
         <div class="connectivity-banner-copy">
@@ -2594,40 +2912,149 @@
     
     <!-- Navigation -->
     <div class="nav-buttons" role="navigation" aria-label="Main app navigation">
+        <div class="sidebar-brand">
+            <div class="sidebar-brand-mark">
+                <img src="logo.png" alt="Make A Way logo" class="sidebar-brand-logo">
+            </div>
+            <div class="sidebar-brand-copy">
+                <strong>ShopFlow</strong>
+                <span>Business Manager</span>
+            </div>
+        </div>
         <div class="nav-group nav-group-main">
             <button class="nav-btn active" data-page="home" onclick="showPage('home')">
-                <span class="nav-label">Home</span>
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+                        <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+                        <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+                        <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+                    </svg>
+                </span>
+                <span class="nav-label">Dashboard</span>
             </button>
             <button class="nav-btn" data-page="addSale" onclick="showPage('addSale')">
-                <span class="nav-label">Add Sale</span>
-            </button>
-            <button class="nav-btn" data-page="salesHistory" onclick="showPage('salesHistory')">
-                <span class="nav-label">Sales History</span>
-            </button>
-            <button class="nav-btn" data-page="customers" onclick="showPage('customers')">
-                <span class="nav-label">Customers</span>
-            </button>
-            <button class="nav-btn" data-page="clate" onclick="showPage('clate')">
-                <span class="nav-label">Clate/Deposit</span>
-            </button>
-            <button class="nav-btn" data-page="stockManagement" onclick="showPage('stockManagement')">
-                <span class="nav-label">Stock Management</span>
-            </button>
-            <button class="nav-btn" data-page="reports" onclick="showPage('reports')" style="display: none;">
-                <span class="nav-label">Reports</span>
-            </button>
-            <button id="adminSalesBtn" class="nav-btn" data-page="adminSales" onclick="showPage('adminSales')" style="display: none;">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="9" cy="19" r="1.5"></circle>
+                        <circle cx="18" cy="19" r="1.5"></circle>
+                        <path d="M3 4h2l2.2 10.1a1 1 0 0 0 1 .8H19a1 1 0 0 0 1-.8L21 7H7.4"></path>
+                    </svg>
+                </span>
                 <span class="nav-label">Sales</span>
             </button>
+            <button id="adminSalesBtn" class="nav-btn" data-page="adminSales" onclick="showPage('adminSales')" style="display: none;">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 18V6"></path>
+                        <path d="M10 18V10"></path>
+                        <path d="M16 18V4"></path>
+                        <path d="M22 18V8"></path>
+                    </svg>
+                </span>
+                <span class="nav-label">Sales</span>
+            </button>
+            <button class="nav-btn" data-page="stockManagement" onclick="showPage('stockManagement')">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3 4 7.5 12 12l8-4.5L12 3Z"></path>
+                        <path d="M4 7.5V16.5L12 21l8-4.5V7.5"></path>
+                        <path d="M12 12V21"></path>
+                    </svg>
+                </span>
+                <span class="nav-label">Inventory</span>
+            </button>
+            <button class="nav-btn" data-page="customers" onclick="showPage('customers')">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9.5" cy="7" r="4"></circle>
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                </span>
+                <span class="nav-label">Customers</span>
+            </button>
+            <button class="nav-btn" data-page="salesHistory" onclick="showPage('salesHistory')">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 20V10"></path>
+                        <path d="M18 20V4"></path>
+                        <path d="M6 20v-6"></path>
+                    </svg>
+                </span>
+                <span class="nav-label">Activity Log</span>
+            </button>
+            <button class="nav-btn" data-page="clate" onclick="showPage('clate')">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M8 3h8"></path>
+                        <path d="M10 3v4l-4.5 7.5A4 4 0 0 0 9 21h6a4 4 0 0 0 3.5-6.5L14 7V3"></path>
+                    </svg>
+                </span>
+                <span class="nav-label">Deposits</span>
+            </button>
+            <button class="nav-btn" data-page="reports" onclick="showPage('reports')" style="display: none;">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M7 3h8l4 4v14H7z"></path>
+                        <path d="M15 3v5h5"></path>
+                        <path d="M10 13h6"></path>
+                        <path d="M10 17h6"></path>
+                    </svg>
+                </span>
+                <span class="nav-label">Reports</span>
+            </button>
             <button id="adminAccountsBtn" class="nav-btn" data-page="adminAccounts" onclick="showPage('adminAccounts')" style="display: none;">
-                <span class="nav-label">Account Management</span>
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3 19 6v6c0 4.5-2.9 7.9-7 9-4.1-1.1-7-4.5-7-9V6l7-3Z"></path>
+                        <path d="M9.5 12.5 11.3 14.3 14.8 10.8"></path>
+                    </svg>
+                </span>
+                <span class="nav-label">Admin</span>
             </button>
             <button id="adminSettingsNavBtn" class="nav-btn" data-page="settings" onclick="showPage('settings')" style="display: none;">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.08V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.91.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.08-.4H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.91l-.06-.06A2 2 0 0 1 7.03 4.2l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.08V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.91-.34l.06-.06A2 2 0 0 1 19.8 7.03l-.06.06A1.7 1.7 0 0 0 19.4 9c0 .38.14.74.4 1 .29.27.67.41 1.08.4H21a2 2 0 1 1 0 4h-.09c-.41-.01-.79.13-1.08.4-.26.26-.4.62-.43 1.09Z"></path>
+                    </svg>
+                </span>
                 <span class="nav-label">Settings</span>
             </button>
         </div>
         <div class="nav-group nav-group-meta">
-            <div id="rwClock" class="rw-clock" title="Rwanda Time (Africa/Kigali)" aria-live="polite">
+            <div class="sidebar-account-card">
+                <span id="sidebarAccountMode" class="sidebar-account-mode">User</span>
+                <strong id="sidebarAccountName">Not logged in</strong>
+            </div>
+            <button id="sidebarSwitchBtn" class="sidebar-footer-btn" type="button" title="Switch Account" aria-label="Switch Account" onclick="void logoutCurrentUser()">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 3h5v5"></path>
+                        <path d="M10 14 19 5"></path>
+                        <path d="M19 14v5h-5"></path>
+                        <path d="M14 19 5 10"></path>
+                    </svg>
+                </span>
+                <span class="nav-label">Switch Account</span>
+            </button>
+            <button id="sidebarCollapseBtn" class="sidebar-footer-btn" type="button" title="Collapse Sidebar" aria-label="Collapse Sidebar" aria-pressed="false" onclick="toggleSidebarCollapsed()">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m15 18-6-6 6-6"></path>
+                    </svg>
+                </span>
+                <span class="nav-label">Collapse</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Pages -->
+    <div class="page-container">
+        <div class="page-utility-bar">
+            <div id="rwClock" class="rw-clock page-clock" title="Rwanda Time (Africa/Kigali)" aria-live="polite">
                 <div class="rw-clock-head">
                     <span id="rwClockDay" class="rw-clock-day">Monday</span>
                     <span class="rw-clock-zone">Kigali</span>
@@ -2636,38 +3063,119 @@
                 <div id="rwClockTime" class="rw-clock-time">00:00:00</div>
             </div>
         </div>
-    </div>
-
-    <!-- Pages -->
-    <div class="page-container">
         <!-- Home Page -->
         <div id="home" class="page">
             <div class="dashboard home-dashboard">
-                <div class="dashboard-card home-hero-card">
-                    <div class="home-hero-meta">
-                        <span class="home-chip">Today</span>
-                        <span class="home-chip muted">Live</span>
-                    </div>
-                    <h3>Today's Sales</h3>
-                    <h1 id="todaySales">RWF 0</h1>
-                    <p>Daily total</p>
-                </div>
-                
-                <div class="stats-grid">
-                    <div class="stat-card home-stat profit">
-                        <h4>Today's Profit</h4>
-                        <h2 id="todayProfit">RWF 0</h2>
-                    </div>
-                    <div class="stat-card home-stat debt">
-                        <h4>Customers Owing</h4>
-                        <h2 id="customersOwing">RWF 0</h2>
-                    </div>
-                    <div class="stat-card home-stat deposits">
-                        <h4>Pending Deposits</h4>
-                        <h2 id="clatesPending">RWF 0</h2>
+                <div class="dashboard-hero">
+                    <div>
+                        <span id="homeDashboardEyebrow" class="dashboard-eyebrow">Dashboard</span>
+                        <h1 id="dashboardGreeting" class="dashboard-greeting">Good Afternoon</h1>
+                        <p id="dashboardDate" class="dashboard-date">Tuesday, March 31, 2026</p>
                     </div>
                 </div>
-                <div id="stockWarningBanner" class="stock-warning-banner" style="display: none;"></div>
+
+                <div class="dashboard-metrics">
+                    <div class="metric-card">
+                        <div class="metric-copy">
+                            <span id="homeRevenueLabel" class="metric-label">Today's Revenue</span>
+                            <strong id="todaySales" class="metric-value">RWF 0</strong>
+                            <small id="homeRevenueMeta" class="metric-meta">0 sales</small>
+                        </div>
+                        <div class="metric-icon-box" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2v20"></path>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14.5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div id="homeSecondaryMetricCard" class="metric-card">
+                        <div class="metric-copy">
+                            <span id="homeSecondaryMetricLabel" class="metric-label">Today's Sales</span>
+                            <strong id="homeSecondaryMetricValue" class="metric-value">0</strong>
+                            <strong id="todayProfit" class="metric-value metric-value-alt" style="display: none;">RWF 0</strong>
+                            <small id="homeSecondaryMetricMeta" class="metric-meta">Transactions</small>
+                        </div>
+                        <div class="metric-icon-box" aria-hidden="true">
+                            <svg class="metric-icon-sales" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="9" cy="19" r="1.5"></circle>
+                                <circle cx="18" cy="19" r="1.5"></circle>
+                                <path d="M3 4h2l2.2 10.1a1 1 0 0 0 1 .8H19a1 1 0 0 0 1-.8L21 7H7.4"></path>
+                            </svg>
+                            <svg class="metric-icon-profit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+                                <path d="M4 16 10 10 14 14 20 8"></path>
+                                <path d="M15 8h5v5"></path>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-copy">
+                            <span id="homeLowStockLabel" class="metric-label">Low Stock Items</span>
+                            <strong id="homeLowStockCount" class="metric-value">0</strong>
+                            <small id="homeLowStockMeta" class="metric-meta">Need restocking</small>
+                        </div>
+                        <div class="metric-icon-box" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 9v4"></path>
+                                <path d="M12 17h.01"></path>
+                                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-copy">
+                            <span id="homeCreditLabel" class="metric-label">Outstanding Credit</span>
+                            <strong id="customersOwing" class="metric-value">RWF 0</strong>
+                            <small id="homeCreditMetricMeta" class="metric-meta">0 customers</small>
+                        </div>
+                        <div class="metric-icon-box" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9.5" cy="7" r="4"></circle>
+                                <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="dashboard-panel dashboard-panel-chart">
+                        <div class="dashboard-panel-head">
+                            <h3 id="homeSalesOverviewTitle">Monthly Sales Overview</h3>
+                            <div class="dashboard-legend">
+                                <span class="dashboard-legend-item">
+                                    <span class="legend-dot revenue"></span>
+                                    <span>Revenue</span>
+                                </span>
+                                <span id="dashboardProfitLegend" class="dashboard-legend-item" style="display: none;">
+                                    <span class="legend-dot profit"></span>
+                                    <span>Profit</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="dashboard-chart-wrap">
+                            <canvas id="homeSalesChart" width="960" height="340"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-panel dashboard-panel-alert">
+                        <div class="dashboard-panel-head">
+                            <h3 id="homeLowStockPanelTitle">Low Stock Alert</h3>
+                        </div>
+                        <div id="dashboardLowStockList" class="dashboard-alert-list"></div>
+                        <button class="dashboard-link-btn" type="button" onclick="openDashboardInventory()">View Inventory</button>
+                    </div>
+                </div>
+
+                <div class="dashboard-notices">
+                    <div id="stockWarningBanner" class="stock-warning-banner" style="display: none;"></div>
+                    <div id="debtNotificationBanner" class="debt-notification-banner" style="display: none;"></div>
+                </div>
+
+                <div id="clatesPending" class="dashboard-hidden-value" aria-hidden="true">RWF 0</div>
             </div>
         </div>
 
@@ -2731,6 +3239,11 @@
                     <div class="customer-select" id="customerSelectContainer" style="display: none;">
                         <label>Select Customer:</label>
                         <select id="customerSelect"></select>
+                    </div>
+
+                    <div class="customer-select" id="creditPromiseDateContainer" style="display: none;">
+                        <label for="creditPromiseDate">Promised Payback Date:</label>
+                        <input type="date" id="creditPromiseDate" disabled>
                     </div>
                     
                     <div class="total-display" style="background: linear-gradient(135deg, #e7f6ff 0%, #d6f0ff 58%, #d7f6ef 100%); color: #124d74; padding: 20px; border-radius: 10px; margin: 20px 0; border: 1px solid #b8dff1;">
@@ -3198,109 +3711,212 @@
             </div>
             
             <div class="settings-layout">
-                <div class="settings-card settings-card-primary" id="settingsBusinessCard">
-                    <h3 id="settingsBusinessTitle" class="settings-card-title">Business Settings</h3>
-                    <div class="settings-group">
-                        <label for="profitPercentage">Profit Percentage (%)</label>
-                        <div class="settings-inline-row">
-                            <input type="number" id="profitPercentage" placeholder="Enter profit %" value="30" min="0" max="100">
-                            <button onclick="saveProfitPercentage()" class="settings-btn settings-btn-primary">Save</button>
+                <div class="settings-card settings-card-secondary" id="settingsAccountCard">
+                    <div class="settings-card-head">
+                        <div>
+                            <h3 id="settingsAccountTitle" class="settings-card-title">Account &amp; Security</h3>
+                            <p id="settingsAccountDescription" class="settings-section-note">Review the signed-in phone account first, then move through your security actions in order.</p>
                         </div>
-                        <div class="settings-subgroup">
+                    </div>
+                    <div class="settings-account-summary">
+                        <div class="settings-account-copy">
+                            <span id="activeAccountLabel" class="settings-label-eyebrow">Active Account</span>
+                            <strong id="activeAccountName">Not logged in</strong>
+                            <span id="activeAccountMeta" class="settings-muted-value">Phone login is required for every session.</span>
+                        </div>
+                        <span id="activeAccountRole" class="settings-status-pill">User</span>
+                    </div>
+                    <div class="settings-action-stack">
+                        <button id="changePinBtn" onclick="changePinFromSettings()" class="settings-btn settings-btn-primary settings-full-btn" type="button">Change PIN</button>
+                        <button id="generateResetCodeBtn" onclick="generateResetCodeFromSettings()" class="settings-btn settings-btn-primary settings-full-btn" type="button">Generate Reset Code</button>
+                        <p id="resetCodeStatusText" class="settings-help-text">Reset codes are issued by admins only and expire automatically after a short time.</p>
+                        <button id="settingsLogoutBtn" onclick="logoutFromSettings()" class="settings-btn settings-btn-secondary settings-full-btn" type="button">Log Out</button>
+                    </div>
+                </div>
+
+                <div class="settings-card settings-card-primary" id="settingsBusinessCard">
+                    <div class="settings-card-head">
+                        <div>
+                            <h3 id="settingsBusinessTitle" class="settings-card-title">Business Settings</h3>
+                            <p id="settingsBusinessDescription" class="settings-section-note">Review the current profit model, make edits, then save each group at the bottom of its own block.</p>
+                        </div>
+                    </div>
+                    <div class="settings-panel">
+                        <div class="settings-group">
+                            <label for="profitPercentage">Profit Percentage (%)</label>
+                            <input type="number" id="profitPercentage" placeholder="Enter profit %" value="30" min="0" max="100">
+                        </div>
+                        <div class="settings-group">
                             <label for="profitMode">Profit Calculation Mode</label>
                             <select id="profitMode">
                                 <option value="percentage">Percentage of sale total</option>
                                 <option value="perCase">Per-drink case profit</option>
                             </select>
                         </div>
-                        <p id="profitInfoText" class="settings-help-text">Used to calculate profit in reports and dashboards</p>
-                        <div class="settings-subgroup" id="drinkProfitManager">
-                            <h4 id="drinkProfitManagerTitle" class="settings-mini-title">Per-Drink Profit Per Case</h4>
-                            <div id="drinkProfitList" class="drink-profit-list"></div>
-                            <button id="saveDrinkProfitBtn" onclick="saveDrinkProfitsFromSettings()" class="settings-btn settings-btn-primary settings-full-btn" style="margin-top: 10px;">Save Drink Profits</button>
-                            <p id="drinkProfitInfoText" class="settings-help-text">Set and edit profit per case for each drink.</p>
+                        <p id="profitInfoText" class="settings-help-text">Used to calculate profit in reports and dashboards.</p>
+                        <p id="profitAccessNote" class="settings-help-text settings-access-note" style="display: none;">Admin session required to edit business profit settings.</p>
+                        <button id="saveBusinessSettingsBtn" onclick="saveProfitPercentage()" class="settings-btn settings-btn-primary settings-full-btn" type="button">Save Business Settings</button>
+                    </div>
+                    <div class="settings-panel settings-panel-muted">
+                        <div class="settings-panel-head">
+                            <h4 class="settings-mini-title">Customer Debt Limit</h4>
                         </div>
+                        <div class="settings-group">
+                            <label for="maxCustomerDebt">Maximum Debt Per Customer (RWF)</label>
+                            <input type="number" id="maxCustomerDebt" placeholder="Leave empty for no limit" min="0">
+                        </div>
+                        <p class="settings-help-text">New debt, loyal-customer debt, and credit sales cannot go above this amount.</p>
+                        <button id="saveCustomerDebtSettingsBtn" onclick="saveCustomerDebtSettings()" class="settings-btn settings-btn-primary settings-full-btn" type="button">Save Debt Limit</button>
+                    </div>
+                    <div class="settings-panel settings-panel-muted" id="drinkProfitManager">
+                        <div class="settings-panel-head">
+                            <h4 id="drinkProfitManagerTitle" class="settings-mini-title">Per-Drink Profit Per Case</h4>
+                        </div>
+                        <div id="drinkProfitList" class="drink-profit-list"></div>
+                        <p id="drinkProfitInfoText" class="settings-help-text">Set and edit profit per case for each drink.</p>
+                        <button id="saveDrinkProfitBtn" onclick="saveDrinkProfitsFromSettings()" class="settings-btn settings-btn-primary settings-full-btn" type="button">Save Drink Profits</button>
                     </div>
                 </div>
 
                 <div class="settings-card settings-card-primary" id="settingsInterfaceCard">
-                    <h3 id="settingsInterfaceTitle" class="settings-card-title">Appearance, Language & Currency</h3>
+                    <div class="settings-card-head">
+                        <div>
+                            <h3 id="settingsInterfaceTitle" class="settings-card-title">Appearance &amp; Preferences</h3>
+                            <p id="settingsInterfaceDescription" class="settings-section-note">Adjust how the workspace looks and reads, then save your preferences in one clear step.</p>
+                        </div>
+                    </div>
+                    <input type="hidden" id="themeMode" value="light">
                     <div class="settings-group">
-                        <label for="themeMode">Theme Mode</label>
+                        <label for="themeMode">Theme Toggle</label>
                         <div class="settings-theme-row">
-                            <button onclick="setTheme('light')" id="lightThemeBtn" class="settings-btn settings-theme-btn">Light Mode</button>
-                            <button onclick="setTheme('dark')" id="darkThemeBtn" class="settings-btn settings-theme-btn dark">Dark Mode</button>
+                            <button onclick="setTheme('light')" id="lightThemeBtn" class="settings-btn settings-theme-btn" type="button">Light Mode</button>
+                            <button onclick="setTheme('dark')" id="darkThemeBtn" class="settings-btn settings-theme-btn dark" type="button">Dark Mode</button>
                         </div>
                     </div>
                     <div class="settings-group">
-                        <label for="language">Select Language</label>
+                        <label for="language">Language</label>
                         <select id="language">
                             <option value="en">English</option>
                             <option value="rw">Kinyarwanda</option>
                             <option value="fr">Francais</option>
                         </select>
-                        <p id="languageInfoText" class="settings-help-text">Language preference for the app interface</p>
+                        <p id="languageInfoText" class="settings-help-text">Language preference for the app interface.</p>
                     </div>
                     <div class="settings-group">
-                        <label for="currency">Currency Symbol</label>
+                        <label for="currency">Currency</label>
                         <input type="text" id="currency" placeholder="RWF" value="RWF" maxlength="5">
-                        <p id="currencyInfoText" class="settings-help-text">Default currency symbol (e.g., RWF, $, EUR)</p>
+                        <p id="currencyInfoText" class="settings-help-text">Default currency symbol (for example RWF, $, or EUR).</p>
                     </div>
-                    <button id="saveLanguageCurrencyBtn" onclick="saveCurrencyAndLanguage()" class="settings-btn settings-btn-primary settings-full-btn">Save Language & Currency</button>
+                    <button id="saveLanguageCurrencyBtn" onclick="savePreferences()" class="settings-btn settings-btn-primary settings-full-btn" type="button">Save Preferences</button>
                 </div>
 
                 <div class="settings-card settings-card-secondary" id="settingsSystemCard">
-                    <h3 id="settingsSystemTitle" class="settings-card-title">System Info</h3>
-                    <div class="settings-system-info">
-                        <p id="appNameRow"><strong>App Name:</strong> Make A Way</p>
-                        <p id="versionRow"><strong>Version:</strong> 2.0</p>
-                        <p id="purposeRow"><strong>Purpose:</strong> Business Tracking & Sales Management System</p>
-                        <p id="storageRow"><strong>Storage:</strong> <span id="storageStatus">Checking...</span></p>
-                        <p id="accountRow"><strong>Active Account:</strong> <span id="activeAccountName">Not logged in</span></p>
-                        <p id="networkRow"><strong>Connection:</strong> <span id="connectivityStatusText">Checking...</span></p>
-                        <p id="syncRow"><strong>Offline Sync:</strong> <span id="syncStatusText">Waiting...</span></p>
-                        <div class="settings-inline-row">
-                            <button id="syncNowBtn" onclick="triggerManualSync()" class="settings-btn settings-btn-primary" type="button">Sync Now</button>
+                    <div class="settings-card-head">
+                        <div>
+                            <h3 id="settingsSystemTitle" class="settings-card-title">System Status</h3>
+                            <p id="settingsSystemDescription" class="settings-section-note">Check connection health first, confirm the latest sync time, then trigger a manual sync only when needed.</p>
                         </div>
                     </div>
+                    <div class="settings-system-grid">
+                        <div class="settings-status-item" id="networkRow">
+                            <span id="connectionStatusLabel" class="settings-status-label">Connection Status</span>
+                            <strong id="connectivityStatusText">Checking...</strong>
+                        </div>
+                        <div class="settings-status-item" id="syncRow">
+                            <span id="lastSyncLabel" class="settings-status-label">Last Sync</span>
+                            <strong id="syncStatusText">Waiting...</strong>
+                        </div>
+                    </div>
+                    <button id="syncNowBtn" onclick="triggerManualSync()" class="settings-btn settings-btn-secondary" type="button">Sync Now</button>
                 </div>
 
-                <div class="settings-card settings-card-secondary" id="settingsAdminAutomationCard" style="display: none;">
-                    <h3 class="settings-card-title">Admin Automation</h3>
-                    <div class="admin-auto-pdf-card" style="margin-top: 0;">
-                        <p class="settings-help-text" style="margin: 0 0 12px;">Choose when the app should auto-download the day&apos;s sales PDF.</p>
+                <div class="settings-card settings-card-secondary" id="settingsAdminAutomationCard">
+                    <div class="settings-card-head">
+                        <div>
+                            <h3 id="settingsAutomationTitle" class="settings-card-title">Automations &amp; Reports</h3>
+                            <p id="settingsAutomationDescription" class="settings-section-note">Enable the automation, choose its export time, save the schedule, then use the manual download only if you need the latest file again.</p>
+                        </div>
+                    </div>
+                    <div class="admin-auto-pdf-card settings-panel" style="margin-top: 0;">
                         <label class="admin-auto-pdf-toggle" for="adminAutoPdfEnabled">
                             <input type="checkbox" id="adminAutoPdfEnabled">
-                            <span>Auto-download the day&apos;s sales PDF every day</span>
+                            <span>Auto-download daily sales PDF</span>
                         </label>
                         <div class="admin-auto-pdf-row">
                             <div class="admin-auto-pdf-field">
                                 <label for="adminAutoPdfTime">Export Time</label>
                                 <input type="time" id="adminAutoPdfTime" step="60">
                             </div>
-                            <button id="saveAdminAutoPdfBtn" onclick="saveAutoDailySalesPdfSettings()" class="settings-btn settings-btn-primary" type="button">Save Auto Export</button>
-                            <button id="downloadLastAutoPdfBtn" onclick="downloadLastAutoDailySalesPdf()" class="settings-btn" type="button">Download Last Auto PDF</button>
                         </div>
+                        <button id="saveAdminAutoPdfBtn" onclick="saveAutoDailySalesPdfSettings()" class="settings-btn settings-btn-primary settings-full-btn" type="button">Save Automation Settings</button>
+                        <button id="downloadLastAutoPdfBtn" onclick="downloadLastAutoDailySalesPdf()" class="settings-btn settings-btn-secondary settings-full-btn" type="button">Download Last Auto PDF</button>
                         <p id="adminAutoPdfStatus" class="settings-help-text">Choose a close-of-business time, keep the app open, and allow automatic downloads in your browser.</p>
                     </div>
                 </div>
 
-                <div class="settings-card settings-card-danger" id="settingsDataCard">
-                    <h3 id="settingsDataTitle" class="settings-card-title">Data Management</h3>
-                    <div id="archiveYearPanel">
-                        <div class="settings-group">
-                            <label for="archiveYearSelect">Archive Completed Year</label>
-                            <div class="settings-inline-row">
-                                <select id="archiveYearSelect"></select>
-                                <button id="archiveYearBtn" onclick="archiveSelectedYear()" class="settings-btn settings-btn-primary">Archive Year</button>
+                <div class="settings-card settings-card-secondary" id="settingsAiCard">
+                    <div class="settings-card-head settings-card-head-action">
+                        <div>
+                            <h3 id="settingsAiTitle" class="settings-card-title">AI Assistant</h3>
+                            <p id="settingsAiDescription" class="settings-section-note">Generate a fresh snapshot first, then move from summary to guided quick actions.</p>
+                        </div>
+                        <button id="generateInsightsBtn" onclick="generateSettingsAiInsights()" class="settings-btn settings-btn-primary" type="button">Generate Insights</button>
+                    </div>
+                    <div class="settings-ai-summary">
+                        <div class="settings-ai-summary-head">
+                            <span class="settings-label-eyebrow">Today's Summary</span>
+                            <span id="settingsAiDate" class="settings-status-pill">Today</span>
+                        </div>
+                        <div class="settings-ai-metrics">
+                            <div class="settings-ai-metric">
+                                <span>Total Sales</span>
+                                <strong id="settingsAiTotal">--</strong>
                             </div>
-                            <p id="archiveYearInfo" class="settings-help-text">Moves selected year sales and deposit records into archive and removes them from active workspace.</p>
+                            <div class="settings-ai-metric">
+                                <span>Best Product</span>
+                                <strong id="settingsAiBest">--</strong>
+                            </div>
+                            <div class="settings-ai-metric">
+                                <span>Slow Product</span>
+                                <strong id="settingsAiSlow">--</strong>
+                            </div>
+                        </div>
+                        <p id="settingsAiRecommendation" class="settings-help-text">Generate insights to see today's AI recommendation.</p>
+                    </div>
+                    <div class="settings-quick-actions">
+                        <button id="settingsAiAnalyzeBtn" onclick="runSettingsAiQuickAction('Analyze my business')" class="settings-btn settings-btn-secondary" type="button">Analyze</button>
+                        <button id="settingsAiRestockBtn" onclick="runSettingsAiQuickAction('What should I restock?')" class="settings-btn settings-btn-secondary" type="button">Restock</button>
+                        <button id="settingsAiProfitBtn" onclick="runSettingsAiQuickAction('How can I increase profit?')" class="settings-btn settings-btn-secondary" type="button">Profit Insights</button>
+                    </div>
+                </div>
+
+                <div class="settings-card settings-card-danger" id="settingsDataCard">
+                    <div class="settings-card-head">
+                        <div>
+                            <h3 id="settingsDataTitle" class="settings-card-title">Data Management</h3>
+                            <p id="settingsDataDescription" class="settings-section-note">Start with archive tools for safe cleanup, then move to destructive actions only in the separated danger zone.</p>
                         </div>
                     </div>
-                    <div class="settings-danger-actions">
-                        <button id="clearUserDataBtn" onclick="clearAllData()" class="settings-btn settings-btn-danger settings-full-btn">Clear User Data</button>
+                    <div id="archiveYearPanel" class="settings-panel">
+                        <div class="settings-panel-head">
+                            <h4 id="archiveSectionTitle" class="settings-mini-title">Archive</h4>
+                        </div>
+                        <div class="settings-group">
+                            <label for="archiveYearSelect">Archive Completed Year</label>
+                            <select id="archiveYearSelect"></select>
+                        </div>
+                        <p id="archiveYearInfo" class="settings-help-text">Moves selected year sales and deposit records into archive and removes them from active workspace.</p>
+                        <button id="archiveYearBtn" onclick="archiveSelectedYear()" class="settings-btn settings-btn-primary settings-full-btn" type="button">Archive Year</button>
                     </div>
-                    <p id="clearWarningText" class="settings-warning-note">Warning: clears only the currently logged-in user data.</p>
+                    <div class="settings-danger-zone">
+                        <div class="settings-panel-head">
+                            <h4 id="dangerZoneTitle" class="settings-mini-title">Danger Zone</h4>
+                        </div>
+                        <p id="clearWarningText" class="settings-warning-note">Warning: clears only the currently logged-in user data.</p>
+                        <div class="settings-danger-actions">
+                            <button id="clearUserDataBtn" onclick="clearAllData()" class="settings-btn settings-btn-danger settings-full-btn" type="button">Clear User Data</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3447,3 +4063,4 @@
 </script>
 </body>
 </html>
+ 
