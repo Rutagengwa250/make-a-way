@@ -62,6 +62,25 @@ function loadPdfScriptAsset(src) {
     });
 }
 
+async function loadPdfScriptAssetFromCandidates(candidates = []) {
+    const list = Array.isArray(candidates) ? candidates : [candidates];
+    let lastError = null;
+
+    for (const src of list) {
+        const normalizedSrc = String(src || '').trim();
+        if (!normalizedSrc) continue;
+        try {
+            await loadPdfScriptAsset(normalizedSrc);
+            return normalizedSrc;
+        } catch (error) {
+            lastError = error;
+            console.warn(`PDF asset load failed for ${normalizedSrc}`, error);
+        }
+    }
+
+    throw lastError || new Error('Could not load required PDF asset.');
+}
+
 let pdfLibrariesReadyPromise = null;
 
 async function ensurePDFLibrariesReady() {
@@ -74,18 +93,34 @@ async function ensurePDFLibrariesReady() {
     }
 
     pdfLibrariesReadyPromise = (async () => {
+        const jsPdfSources = [
+            'libs/jspdf.umd.min.js',
+            'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+            'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'
+        ];
+        const autoTableSources = [
+            'libs/jspdf.plugin.autotable.min.js',
+            'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
+            'https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js'
+        ];
+        const html2canvasSources = [
+            'libs/html2canvas.min.js',
+            'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+            'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js'
+        ];
+
         const alreadyLoaded = await waitForPdfLibrary(() => Boolean(getPDFConstructor()), 1200, 120);
         if (!alreadyLoaded) {
-            await loadPdfScriptAsset('libs/jspdf.umd.min.js');
+            await loadPdfScriptAssetFromCandidates(jsPdfSources);
             const loadedAfterRetry = await waitForPdfLibrary(() => Boolean(getPDFConstructor()), 1800, 120);
             if (!loadedAfterRetry) {
-                throw new Error('jsPDF library is still unavailable after retrying.');
+                throw new Error('jsPDF library is still unavailable after retrying local and CDN sources.');
             }
         }
 
         if (!hasPdfAutoTablePlugin()) {
             try {
-                await loadPdfScriptAsset('libs/jspdf.plugin.autotable.min.js');
+                await loadPdfScriptAssetFromCandidates(autoTableSources);
                 await waitForPdfLibrary(() => hasPdfAutoTablePlugin(), 1000, 120);
             } catch (error) {
                 console.warn('autoTable plugin could not be reloaded. Falling back to simple PDF tables.', error);
@@ -94,7 +129,7 @@ async function ensurePDFLibrariesReady() {
 
         if (typeof window.html2canvas !== 'function') {
             try {
-                await loadPdfScriptAsset('libs/html2canvas.min.js');
+                await loadPdfScriptAssetFromCandidates(html2canvasSources);
             } catch (error) {
                 console.warn('html2canvas could not be reloaded.', error);
             }
@@ -1657,7 +1692,7 @@ function getDefaultUserSettings() {
         profitPercentage: 30,
         profitMode: 'percentage',
         maxCustomerDebt: 0,
-        theme: 'light',
+        theme: 'dark',
         language: 'en',
         currency: 'RWF',
         onboardingDone: true,
@@ -1683,6 +1718,10 @@ function sanitizeUserSettings(raw) {
     delete next.legacyMigratedUsers;
     delete next.legacyDataMigrated;
     delete next.profitPerCase;
+    // Theme is locked to dark mode for all accounts.
+    next.theme = 'dark';
+    // Currency setting is fixed.
+    next.currency = 'RWF';
     const parsedMaxDebt = Number(next.maxCustomerDebt);
     next.maxCustomerDebt = Number.isFinite(parsedMaxDebt) && parsedMaxDebt > 0 ? parsedMaxDebt : 0;
     return { ...getDefaultUserSettings(), ...next };
@@ -1876,9 +1915,113 @@ function formatCustomerTypeLabel(value) {
 function normalizeCustomerPromiseDate(value) {
     const raw = String(value || '').trim();
     if (!raw) return '';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) return raw;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw}T23:59`;
+
     const parsed = new Date(raw);
-    return Number.isNaN(parsed.getTime()) ? '' : toLocalDayKey(parsed);
+    return Number.isNaN(parsed.getTime()) ? '' : toLocalMinuteDateTimeKey(parsed);
+}
+
+function splitCustomerPromiseDateTime(value) {
+    const normalized = normalizeCustomerPromiseDate(value);
+    if (!normalized) {
+        return { datePart: '', timePart: '' };
+    }
+
+    const [datePart = '', timePartRaw = ''] = normalized.split('T');
+    const timePart = /^\d{2}:\d{2}$/.test(timePartRaw) ? timePartRaw : '23:59';
+    return { datePart, timePart };
+}
+
+function combineCustomerPromiseDateTime(dateValue, timeValue) {
+    const datePart = String(dateValue || '').trim();
+    if (!datePart) return '';
+    const rawTime = String(timeValue || '').trim();
+    const timePart = /^\d{2}:\d{2}$/.test(rawTime) ? rawTime : '23:59';
+    return normalizeCustomerPromiseDate(`${datePart}T${timePart}`);
+}
+
+function readCustomerPromiseDateTimeInputs(dateInputId, timeInputId) {
+    const dateValue = document.getElementById(dateInputId)?.value || '';
+    const timeValue = document.getElementById(timeInputId)?.value || '';
+    return combineCustomerPromiseDateTime(dateValue, timeValue);
+}
+
+function writeCustomerPromiseDateTimeInputs(dateInputId, timeInputId, value) {
+    const dateInput = document.getElementById(dateInputId);
+    const timeInput = document.getElementById(timeInputId);
+    const { datePart, timePart } = splitCustomerPromiseDateTime(value);
+    if (dateInput) dateInput.value = datePart;
+    if (timeInput) timeInput.value = timePart;
+}
+
+function setCustomerPromiseDateTimeInputsEnabled(dateInputId, timeInputId, enabled) {
+    const dateInput = document.getElementById(dateInputId);
+    const timeInput = document.getElementById(timeInputId);
+    if (dateInput) dateInput.disabled = !enabled;
+    if (timeInput) timeInput.disabled = !enabled;
+}
+
+function toLocalMinuteDateTimeKey(dateValue) {
+    const dt = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    if (Number.isNaN(dt.getTime())) return '';
+    const year = dt.getFullYear();
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    const hour = String(dt.getHours()).padStart(2, '0');
+    const minute = String(dt.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
+function parseCustomerPromiseDate(value) {
+    const normalized = normalizeCustomerPromiseDate(value);
+    if (!normalized) return null;
+
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(normalized);
+    if (match) {
+        const year = Number(match[1]);
+        const month = Number(match[2]) - 1;
+        const day = Number(match[3]);
+        const hour = Number(match[4]);
+        const minute = Number(match[5]);
+        const date = new Date(year, month, day, hour, minute, 0, 0);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getCustomerDebtOverdueMs(customer, referenceDate = new Date()) {
+    const promiseDate = parseCustomerPromiseDate(getCustomerPromiseDate(customer));
+    const now = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
+    if (!promiseDate || Number.isNaN(now.getTime())) return 0;
+    return Math.max(0, now.getTime() - promiseDate.getTime());
+}
+
+function formatOverdueDurationLabel(msValue) {
+    const ms = Number(msValue);
+    if (!Number.isFinite(ms) || ms <= 0) return 'on time';
+
+    const totalMinutes = Math.max(1, Math.floor(ms / 60000));
+    if (totalMinutes < 60) {
+        return `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'} late`;
+    }
+
+    const totalHours = Math.floor(totalMinutes / 60);
+    if (totalHours < 24) {
+        const minutes = totalMinutes % 60;
+        return minutes > 0
+            ? `${totalHours}h ${minutes}m late`
+            : `${totalHours}h late`;
+    }
+
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    return hours > 0
+        ? `${days} day${days === 1 ? '' : 's'} ${hours}h late`
+        : `${days} day${days === 1 ? '' : 's'} late`;
 }
 
 function normalizeCustomerDebtHistory(entries) {
@@ -2015,25 +2158,26 @@ function clearCustomerPromiseDateIfSettled(customer) {
 }
 
 function isCustomerDebtOverdue(customer, referenceDate = new Date()) {
-    const promiseDate = getCustomerPromiseDate(customer);
-    if (!promiseDate) return false;
-    const todayKey = toLocalDayKey(referenceDate);
-    if (!todayKey) return false;
-    return promiseDate < todayKey;
+    return getCustomerDebtOverdueMs(customer, referenceDate) > 0;
 }
 
 function getCustomerDebtOverdueDays(customer, referenceDate = new Date()) {
-    const promiseDate = parseDayKeyToDate(getCustomerPromiseDate(customer));
-    const todayDate = parseDayKeyToDate(toLocalDayKey(referenceDate));
-    if (!promiseDate || !todayDate) return 0;
-    const diffMs = todayDate.getTime() - promiseDate.getTime();
+    const diffMs = getCustomerDebtOverdueMs(customer, referenceDate);
     if (diffMs <= 0) return 0;
     return Math.floor(diffMs / (24 * 60 * 60 * 1000));
 }
 
 function formatCustomerPromiseDate(value) {
-    const parsed = parseDayKeyToDate(normalizeCustomerPromiseDate(value));
-    return parsed ? parsed.toLocaleDateString() : '';
+    const parsed = parseCustomerPromiseDate(value);
+    return parsed
+        ? parsed.toLocaleString([], {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        })
+        : '';
 }
 
 function getDebtLimitExceededMessage(customerName, nextOwing, limit) {
@@ -2054,13 +2198,18 @@ function getCustomerDebtReminderEntries(list, context = {}) {
     const now = new Date();
     return normalizeCustomersList(list)
         .filter((customer) => Number(customer.owing || 0) > 0 && isCustomerDebtOverdue(customer, now))
-        .map((customer) => ({
-            customerName: customer.name,
-            owing: Number(customer.owing || 0),
-            promisedPaybackDate: getCustomerPromiseDate(customer),
-            overdueDays: getCustomerDebtOverdueDays(customer, now),
-            accountLabel: String(context.accountLabel || '').trim()
-        }));
+        .map((customer) => {
+            const overdueMs = getCustomerDebtOverdueMs(customer, now);
+            return {
+                customerName: customer.name,
+                owing: Number(customer.owing || 0),
+                promisedPaybackDate: getCustomerPromiseDate(customer),
+                overdueMs,
+                overdueDays: getCustomerDebtOverdueDays(customer, now),
+                overdueLabel: formatOverdueDurationLabel(overdueMs),
+                accountLabel: String(context.accountLabel || '').trim()
+            };
+        });
 }
 
 function buildCustomerDebtSummaryHtml(customer) {
@@ -2068,11 +2217,11 @@ function buildCustomerDebtSummaryHtml(customer) {
     const promiseDate = getCustomerPromiseDate(customer);
     const promiseLabel = formatCustomerPromiseDate(promiseDate);
     const isOverdue = isCustomerDebtOverdue(customer);
-    const overdueDays = getCustomerDebtOverdueDays(customer);
+    const overdueLabel = formatOverdueDurationLabel(getCustomerDebtOverdueMs(customer));
     const metaHtml = promiseDate
         ? `<div class="customer-debt-tag ${isOverdue ? 'overdue' : ''}">${escapeHtml(
             isOverdue
-                ? `Promise passed on ${promiseLabel} (${overdueDays} day${overdueDays === 1 ? '' : 's'} late)`
+                ? `Promise passed on ${promiseLabel} (${overdueLabel})`
                 : `Promised payback: ${promiseLabel}`
         )}</div>`
         : '';
@@ -2089,7 +2238,7 @@ function buildCustomerItemMarkup(customer, index, options = {}) {
     const promiseDate = getCustomerPromiseDate(customer);
     const promiseLabel = formatCustomerPromiseDate(promiseDate);
     const overdue = isCustomerDebtOverdue(customer);
-    const overdueDays = getCustomerDebtOverdueDays(customer);
+    const overdueLabel = formatOverdueDurationLabel(getCustomerDebtOverdueMs(customer));
     const overdueLoyal = overdue && isLoyalCustomer(customer);
     return `
         <div class="customer-info">
@@ -2102,7 +2251,7 @@ function buildCustomerItemMarkup(customer, index, options = {}) {
                 ${customer.location ? `<div class="customer-detail-item">&#128205; Location: ${escapeHtml(customer.location)}</div>` : ''}
                 ${customer.type ? `<div class="customer-detail-item">&#127991; Type: ${escapeHtml(formatCustomerTypeLabel(customer.type))}</div>` : ''}
                 ${customer.notes ? `<div class="customer-detail-item">&#128221; Notes: ${escapeHtml(customer.notes)}</div>` : ''}
-                ${promiseDate ? `<div class="customer-detail-item ${overdue ? 'customer-detail-overdue' : ''}">&#128197; Promise Date: ${escapeHtml(promiseLabel)}${overdue ? ` (${overdueDays} day${overdueDays === 1 ? '' : 's'} late)` : ''}</div>` : ''}
+                ${promiseDate ? `<div class="customer-detail-item ${overdue ? 'customer-detail-overdue' : ''}">&#128197; Promise Time: ${escapeHtml(promiseLabel)}${overdue ? ` (${overdueLabel})` : ''}</div>` : ''}
             </div>
             ${buildCustomerDebtSummaryHtml(customer)}
         </div>
@@ -2145,7 +2294,7 @@ async function getAdminHomeDebtReminderEntries() {
         if (a.promisedPaybackDate && b.promisedPaybackDate && a.promisedPaybackDate !== b.promisedPaybackDate) {
             return a.promisedPaybackDate.localeCompare(b.promisedPaybackDate);
         }
-        return (b.overdueDays || 0) - (a.overdueDays || 0);
+        return (b.overdueMs || 0) - (a.overdueMs || 0);
     });
 
     return reminders;
@@ -2182,13 +2331,13 @@ async function renderHomeDebtNotifications() {
                 <strong>${escapeHtml(adminSession ? 'Overdue customer payback reminders across accounts' : 'Overdue customer payback reminders')}</strong>
                 <span>${reminders.length} customer(s) | RWF ${totalOwing.toLocaleString()}</span>
             </div>
-            <p class="debt-notification-copy">These customers passed the date they promised to pay back.</p>
+            <p class="debt-notification-copy">These customers passed the promised payback date and time.</p>
             <div class="debt-notification-list">
                 ${previewItems.map((entry) => `
                     <div class="debt-notification-item">
                         <div>
                             <strong>${escapeHtml(entry.customerName)}</strong>
-                            <span>${escapeHtml(formatCustomerPromiseDate(entry.promisedPaybackDate))} | ${entry.overdueDays} day${entry.overdueDays === 1 ? '' : 's'} late</span>
+                            <span>${escapeHtml(formatCustomerPromiseDate(entry.promisedPaybackDate))} | ${escapeHtml(entry.overdueLabel || 'late')}</span>
                             ${entry.accountLabel ? `<span>${escapeHtml(entry.accountLabel)}</span>` : ''}
                         </div>
                         <strong>RWF ${Number(entry.owing || 0).toLocaleString()}</strong>
@@ -2229,11 +2378,11 @@ async function maybeShowDebtReminderPopup() {
             .slice(0, 5)
             .map((entry, index) => {
                 const accountLine = entry.accountLabel ? ` | Account: ${entry.accountLabel}` : '';
-                return `${index + 1}. ${entry.customerName} | RWF ${Number(entry.owing || 0).toLocaleString()} | Due ${formatCustomerPromiseDate(entry.promisedPaybackDate)} | ${entry.overdueDays} day(s) late${accountLine}`;
+                return `${index + 1}. ${entry.customerName} | RWF ${Number(entry.owing || 0).toLocaleString()} | Due ${formatCustomerPromiseDate(entry.promisedPaybackDate)} | ${entry.overdueLabel || 'late'}${accountLine}`;
             })
             .join('\n');
         const moreCount = reminders.length > 5 ? `\n+ ${reminders.length - 5} more overdue customer(s)` : '';
-        alert(`Payment reminder\n\nThese customers passed their promised payback date:\n\n${preview}${moreCount}`);
+        alert(`Payment reminder\n\nThese customers passed their promised payback date and time:\n\n${preview}${moreCount}`);
     } catch (error) {
         console.warn('Unable to show debt reminder popup:', error);
     }
@@ -3393,6 +3542,7 @@ function toggleSidebarCollapsed() {
     if (!app) return;
     app.classList.toggle('sidebar-collapsed');
     syncSidebarUtilityButtons();
+    enforceSidebarIconState();
 }
 
 function syncSidebarUtilityButtons() {
@@ -3404,6 +3554,7 @@ function syncSidebarUtilityButtons() {
     if (switchBtn) {
         switchBtn.title = 'Switch Account';
         switchBtn.setAttribute('aria-label', 'Switch Account');
+        switchBtn.style.display = activeUser ? 'flex' : 'none';
     }
 
     if (collapseBtn) {
@@ -3416,6 +3567,61 @@ function syncSidebarUtilityButtons() {
         collapseBtn.setAttribute('aria-label', `${actionLabel} Sidebar`);
         collapseBtn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
     }
+}
+
+function enforceSidebarIconState() {
+    const app = document.getElementById('app');
+    if (!app) return;
+
+    const collapsed = app.classList.contains('sidebar-collapsed');
+    document.querySelectorAll('#app .nav-btn, #app .sidebar-footer-btn, #app .sidebar-brand-toggle').forEach((btn) => {
+        const icon = btn.querySelector('.nav-icon');
+        const label = btn.querySelector('.nav-label');
+        const iconSvg = icon ? icon.querySelector('svg') : null;
+
+        if (collapsed) {
+            if (label) label.style.display = 'none';
+            if (icon) {
+                icon.style.display = 'inline-flex';
+                icon.style.visibility = 'visible';
+                icon.style.opacity = '1';
+                icon.style.width = '20px';
+                icon.style.height = '20px';
+                icon.style.minWidth = '20px';
+                icon.style.minHeight = '20px';
+                icon.style.flex = '0 0 20px';
+            }
+            if (iconSvg) {
+                iconSvg.style.display = 'block';
+                iconSvg.style.visibility = 'visible';
+                iconSvg.style.opacity = '1';
+                iconSvg.style.width = '20px';
+                iconSvg.style.height = '20px';
+                iconSvg.style.transform = 'translateX(0)';
+            }
+            return;
+        }
+
+        if (label) label.style.display = '';
+        if (icon) {
+            icon.style.display = '';
+            icon.style.visibility = '';
+            icon.style.opacity = '';
+            icon.style.width = '';
+            icon.style.height = '';
+            icon.style.minWidth = '';
+            icon.style.minHeight = '';
+            icon.style.flex = '';
+        }
+        if (iconSvg) {
+            iconSvg.style.display = '';
+            iconSvg.style.visibility = '';
+            iconSvg.style.opacity = '';
+            iconSvg.style.width = '';
+            iconSvg.style.height = '';
+            iconSvg.style.transform = '';
+        }
+    });
 }
 
 function syncSidebarLabels() {
@@ -3456,6 +3662,7 @@ function syncSidebarLabels() {
     });
 
     syncSidebarUtilityButtons();
+    enforceSidebarIconState();
 }
 
 async function logoutCurrentUser() {
@@ -4111,9 +4318,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateCartDisplay();
     updateHome();
     
-    // Apply theme and settings
-    const currentTheme = settings.theme || 'light';
-    applyTheme(currentTheme);
+    // Apply theme and settings (dark mode only)
+    settings.theme = 'dark';
+    applyTheme('dark');
     updateConnectivityUI();
     
     // Setup search listeners after DOM is ready
@@ -4207,11 +4414,11 @@ function showWelcomeAnimation(startPage = 'home') {
         if (app) app.style.display = 'grid';
         showAppBackgroundLetters();
 
-        // Apply saved theme and language
-        const savedTheme = settings.theme || 'light';
+        // Apply saved language (theme is fixed to dark)
+        settings.theme = 'dark';
         const savedLanguage = settings.language || 'en';
         setAppLanguage(savedLanguage);
-        applyTheme(savedTheme);
+        applyTheme('dark');
         updateActiveUserBadge();
 
         showPage(targetPage);
@@ -4225,7 +4432,7 @@ function showWelcomeAnimation(startPage = 'home') {
 
     // Re-trigger the animation on every login and randomize angle a bit.
     const randomAngle = 116 + Math.floor(Math.random() * 56);
-    const darkActive = (settings.theme || 'light') === 'dark' || document.body.classList.contains('dark-mode');
+    const darkActive = true;
     overlay.classList.toggle('loader-dark', darkActive);
     overlay.style.setProperty('--maw-loader-angle', `${randomAngle}deg`);
     overlay.classList.remove('show');
@@ -4579,11 +4786,11 @@ function refreshAdminAccessUI() {
     document.querySelectorAll('.nav-btn[data-page]').forEach((btn) => {
         const page = btn.dataset.page;
         if (page === 'settings') {
-            btn.style.display = activeUser ? 'inline-flex' : 'none';
+            btn.style.display = activeUser ? 'flex' : 'none';
             return;
         }
         if (adminSession) {
-            btn.style.display = adminVisiblePages.has(page) ? 'inline-flex' : 'none';
+            btn.style.display = adminVisiblePages.has(page) ? 'flex' : 'none';
             return;
         }
         if (page === 'adminPanel' || page === 'adminHub' || page === 'adminSales' || page === 'adminAccounts') {
@@ -4594,12 +4801,17 @@ function refreshAdminAccessUI() {
             btn.style.display = 'none';
             return;
         }
-        btn.style.display = 'inline-flex';
+        btn.style.display = 'flex';
     });
 
     const topSettingsBtn = document.getElementById('topSettingsBtn');
     if (topSettingsBtn) {
         topSettingsBtn.style.display = 'none';
+    }
+
+    const switchBtn = document.getElementById('sidebarSwitchBtn');
+    if (switchBtn) {
+        switchBtn.style.display = activeUser ? 'flex' : 'none';
     }
 
     const reportsNavLabel = document.querySelector('.nav-btn[data-page="reports"] .nav-label');
@@ -4608,6 +4820,7 @@ function refreshAdminAccessUI() {
     }
 
     syncSidebarLabels();
+    enforceSidebarIconState();
     updateActiveUserBadge();
     setReportsPageModeForRole();
     refreshProfitVisibilityUI();
@@ -4666,7 +4879,7 @@ function refreshProfitVisibilityUI() {
     const saveDrinkBtn = document.getElementById('saveDrinkProfitBtn');
     const profitAccessNote = document.getElementById('profitAccessNote');
     if (settingsBusinessCard) {
-        settingsBusinessCard.style.display = '';
+        settingsBusinessCard.style.display = allowProfit ? '' : 'none';
     }
 
     if (profitInput) profitInput.disabled = !allowProfit;
@@ -7570,53 +7783,63 @@ async function exportAdminUsersPDF() {
         }
 
         await ensurePDFLibrariesReady();
-        const doc = createPDFDocument({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        const doc = createPDFDocument({ orientation: 'portrait', unit: 'mm', format: 'a5' });
         const reportTitle = 'Admin Accounts';
         let y = applyPdfBrandHeader(doc, reportTitle);
-        const margin = 12;
+        const margin = 10;
         const activeCount = rows.filter((row) => row.status === 'Active').length;
         const privilegedCount = rows.filter((row) => row.role === 'Owner' || row.role === 'Admin').length;
+        const clip = (value, maxLength = 20) => {
+            const text = String(value || '-').trim() || '-';
+            return text.length > maxLength ? `${text.slice(0, Math.max(1, maxLength - 1))}...` : text;
+        };
 
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(12);
+        doc.setFontSize(10.5);
         doc.setTextColor(12, 96, 156);
         doc.text('Account Summary', margin, y);
-        y += 6;
+        y += 5;
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9.5);
+        doc.setFontSize(8);
         doc.setTextColor(0, 0, 0);
-        doc.text(`Total Accounts: ${rows.length}`, margin, y);
-        doc.text(`Privileged: ${privilegedCount}`, margin + 52, y);
-        doc.text(`Active: ${activeCount}`, margin + 90, y);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, margin + 130, y);
-        y += 6;
+        doc.text(`Total: ${rows.length}`, margin, y);
+        doc.text(`Privileged: ${privilegedCount}`, margin + 36, y);
+        doc.text(`Active: ${activeCount}`, margin + 72, y);
+        y += 4.5;
+        doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y);
+        y += 4.5;
 
         const tableBody = rows.map((row) => [
-            String(row.name),
-            String(row.phone || '-'),
-            String(row.email || '-'),
-            String(row.role),
-            String(row.status),
-            String(row.provider),
-            String(row.lastLoginAt),
-            row.hasPassword ? 'Yes' : 'No'
+            clip(row.name, 16),
+            clip(row.phone || '-', 14),
+            clip(row.role, 10),
+            clip(row.status, 10),
+            clip(row.lastLoginAt, 16)
         ]);
 
         if (typeof doc.autoTable === 'function') {
             doc.autoTable({
                 startY: y,
-                head: [['Name', 'Phone', 'Email', 'Role', 'Status', 'Provider', 'Last Login', 'Password Set']],
+                head: [['Name', 'Phone', 'Role', 'Status', 'Last Login']],
                 body: tableBody,
-                theme: 'grid',
-                styles: { fontSize: 8.2, cellPadding: 2.1 },
-                headStyles: { fillColor: [13, 124, 227], textColor: 255 },
-                alternateRowStyles: { fillColor: [245, 250, 255] }
+                theme: 'striped',
+                styles: { fontSize: 7.2, cellPadding: 1.4, overflow: 'linebreak' },
+                headStyles: { fillColor: [13, 124, 227], textColor: 255, fontSize: 7.4 },
+                alternateRowStyles: { fillColor: [245, 250, 255] },
+                margin: { left: margin, right: margin },
+                columnStyles: {
+                    0: { cellWidth: 30 },
+                    1: { cellWidth: 24 },
+                    2: { cellWidth: 16 },
+                    3: { cellWidth: 16 },
+                    4: { cellWidth: 'auto' }
+                }
             });
         } else {
-            doc.setFontSize(8.5);
-            tableBody.slice(0, 22).forEach((row, rowIndex) => {
-                const yy = y + (rowIndex * 4.8);
-                doc.text(`${row[0]} | ${row[3]} | ${row[4]} | ${row[6]}`, margin, yy);
+            doc.setFontSize(7.2);
+            tableBody.slice(0, 28).forEach((row, rowIndex) => {
+                const yy = y + (rowIndex * 4.2);
+                doc.text(`${row[0]} | ${row[1]} | ${row[2]} | ${row[3]} | ${row[4]}`, margin, yy);
             });
         }
 
@@ -7743,6 +7966,8 @@ function showPage(pageName) {
         topSettingsBtn.classList.toggle('active', isSettingsPage);
         topSettingsBtn.setAttribute('aria-pressed', isSettingsPage ? 'true' : 'false');
     }
+    syncSidebarUtilityButtons();
+    enforceSidebarIconState();
 
     if (activeUser) rememberOpenPage(requestedPage, activeUser);
     
@@ -8745,7 +8970,7 @@ async function confirmSale() {
     }, 0);
     const selectedCustomer = selectedCustomerId !== null ? customers[selectedCustomerId] : null;
     const selectedCustomerRef = selectedCustomer ? selectedCustomer.id : null;
-    const creditPromiseDate = normalizeCustomerPromiseDate(document.getElementById('creditPromiseDate')?.value);
+    const creditPromiseDate = readCustomerPromiseDateTimeInputs('creditPromiseDate', 'creditPromiseTime');
 
     if (currentSaleType === 'credit' && selectedCustomer) {
         const errorMessage = getCustomerDebtRaiseError(selectedCustomer, pendingTotalAmount);
@@ -8754,7 +8979,7 @@ async function confirmSale() {
             return;
         }
         if (shouldUsePromiseDate(selectedCustomer) && !creditPromiseDate && !getCustomerPromiseDate(selectedCustomer)) {
-            alert(`Select the payback date ${selectedCustomer.name} promised to pay.`);
+            alert(`Select the payback date and time ${selectedCustomer.name} promised to pay.`);
             return;
         }
     }
@@ -8827,8 +9052,7 @@ async function confirmSale() {
     if (customerSelectContainer) customerSelectContainer.style.display = 'none';
     const customerSelect = document.getElementById('customerSelect');
     if (customerSelect) customerSelect.value = '';
-    const creditPromiseDateInput = document.getElementById('creditPromiseDate');
-    if (creditPromiseDateInput) creditPromiseDateInput.value = '';
+    writeCustomerPromiseDateTimeInputs('creditPromiseDate', 'creditPromiseTime', '');
     selectedCustomerId = null;
     currentSaleType = 'normal';
     resetQuickDrinkSelection();
@@ -9018,46 +9242,47 @@ function updateCustomerDropdown() {
 function syncCustomerPaybackDateVisibility() {
     const typeSelect = document.getElementById('customerType');
     const group = document.getElementById('customerPaybackDateGroup');
-    const input = document.getElementById('customerPaybackDate');
-    if (!typeSelect || !group || !input) return;
+    const dateInput = document.getElementById('customerPaybackDate');
+    const timeInput = document.getElementById('customerPaybackTime');
+    if (!typeSelect || !group || !dateInput || !timeInput) return;
 
-    const show = normalizeCustomerType(typeSelect.value) === 'loyal';
-    group.style.display = show ? 'block' : 'none';
-    input.disabled = !show;
-    if (!show) input.value = '';
+    group.style.display = 'block';
+    setCustomerPromiseDateTimeInputsEnabled('customerPaybackDate', 'customerPaybackTime', true);
 }
 
 function syncDebtPromiseDateVisibility() {
     const group = document.getElementById('debtPromiseDateGroup');
-    const input = document.getElementById('debtPromiseDate');
+    const dateInput = document.getElementById('debtPromiseDate');
+    const timeInput = document.getElementById('debtPromiseTime');
     const customer = currentCustomerIndex === null ? null : customers[currentCustomerIndex];
-    if (!group || !input) return;
+    if (!group || !dateInput || !timeInput) return;
 
     const show = debtAction === 'add' && shouldUsePromiseDate(customer);
     group.style.display = show ? 'block' : 'none';
-    input.disabled = !show;
+    setCustomerPromiseDateTimeInputsEnabled('debtPromiseDate', 'debtPromiseTime', show);
     if (show) {
-        input.value = normalizeCustomerPromiseDate(customer?.promisedPaybackDate);
+        writeCustomerPromiseDateTimeInputs('debtPromiseDate', 'debtPromiseTime', customer?.promisedPaybackDate);
     } else {
-        input.value = '';
+        writeCustomerPromiseDateTimeInputs('debtPromiseDate', 'debtPromiseTime', '');
     }
 }
 
 function syncCreditPromiseDateVisibility() {
     const container = document.getElementById('creditPromiseDateContainer');
-    const input = document.getElementById('creditPromiseDate');
+    const dateInput = document.getElementById('creditPromiseDate');
+    const timeInput = document.getElementById('creditPromiseTime');
     const customer = selectedCustomerId === null ? null : customers[selectedCustomerId];
     const show = currentSaleType === 'credit' && shouldUsePromiseDate(customer);
 
     if (container) {
         container.style.display = show ? 'block' : 'none';
     }
-    if (input) {
-        input.disabled = !show;
+    if (dateInput || timeInput) {
+        setCustomerPromiseDateTimeInputsEnabled('creditPromiseDate', 'creditPromiseTime', show);
         if (show) {
-            input.value = normalizeCustomerPromiseDate(customer?.promisedPaybackDate);
+            writeCustomerPromiseDateTimeInputs('creditPromiseDate', 'creditPromiseTime', customer?.promisedPaybackDate);
         } else {
-            input.value = '';
+            writeCustomerPromiseDateTimeInputs('creditPromiseDate', 'creditPromiseTime', '');
         }
     }
 }
@@ -9072,6 +9297,7 @@ function openCustomerForm() {
     const notesInput = document.getElementById('customerNotes');
     const debtInput = document.getElementById('customerDebt');
     const paybackDateInput = document.getElementById('customerPaybackDate');
+    const paybackTimeInput = document.getElementById('customerPaybackTime');
     
     if (nameInput) nameInput.value = '';
     if (phoneInput) phoneInput.value = '';
@@ -9080,6 +9306,7 @@ function openCustomerForm() {
     if (notesInput) notesInput.value = '';
     if (debtInput) debtInput.value = '0';
     if (paybackDateInput) paybackDateInput.value = '';
+    if (paybackTimeInput) paybackTimeInput.value = '';
     syncCustomerPaybackDateVisibility();
     
     const overlay = document.getElementById('customerFormOverlay');
@@ -9171,11 +9398,8 @@ function closeDebtForm() {
     if (overlay) overlay.style.display = 'none';
     const amountInput = document.getElementById('debtAmount');
     if (amountInput) amountInput.readOnly = false;
-    const promiseInput = document.getElementById('debtPromiseDate');
-    if (promiseInput) {
-        promiseInput.value = '';
-        promiseInput.disabled = true;
-    }
+    writeCustomerPromiseDateTimeInputs('debtPromiseDate', 'debtPromiseTime', '');
+    setCustomerPromiseDateTimeInputsEnabled('debtPromiseDate', 'debtPromiseTime', false);
     const promiseGroup = document.getElementById('debtPromiseDateGroup');
     if (promiseGroup) promiseGroup.style.display = 'none';
 }
@@ -9199,7 +9423,7 @@ async function saveCustomer() {
     const type = normalizeCustomerType(document.getElementById('customerType').value);
     const notes = document.getElementById('customerNotes').value.trim();
     const debt = parseFloat(document.getElementById('customerDebt').value) || 0;
-    const promisedPaybackDate = normalizeCustomerPromiseDate(document.getElementById('customerPaybackDate')?.value);
+    const promisedPaybackDate = readCustomerPromiseDateTimeInputs('customerPaybackDate', 'customerPaybackTime');
     
     if (!name) {
         alert('Please enter customer name');
@@ -9218,7 +9442,7 @@ async function saveCustomer() {
     }
 
     if (type === 'loyal' && debt > 0 && !promisedPaybackDate) {
-        alert(`Select the payback date ${name} promised to pay.`);
+        alert(`Select the payback date and time ${name} promised to pay.`);
         return;
     }
     
@@ -9285,7 +9509,7 @@ async function saveDeposit() {
 
 async function confirmDebt() {
     const amount = parseFloat(document.getElementById('debtAmount').value);
-    const promisedPaybackDate = normalizeCustomerPromiseDate(document.getElementById('debtPromiseDate')?.value);
+    const promisedPaybackDate = readCustomerPromiseDateTimeInputs('debtPromiseDate', 'debtPromiseTime');
     
     if (isNaN(amount) || amount <= 0) {
         alert('Please enter a valid amount');
@@ -9309,7 +9533,7 @@ async function confirmDebt() {
                     return;
                 }
                 if (shouldUsePromiseDate(customer) && !promisedPaybackDate && !getCustomerPromiseDate(customer)) {
-                    alert(`Select the payback date ${customer.name} promised to pay.`);
+                    alert(`Select the payback date and time ${customer.name} promised to pay.`);
                     return;
                 }
             }
@@ -13183,8 +13407,7 @@ function loadSettings() {
         addDrinkLowStockInput.value = String(getDefaultLowStockThreshold());
     }
     
-    // Load theme and language
-    const currentTheme = settings.theme || 'light';
+    // Load language (theme is fixed to dark)
     const themeInput = document.getElementById('themeMode');
     const language = settings.language || 'en';
     const langSelect = document.getElementById('language');
@@ -13203,10 +13426,11 @@ function loadSettings() {
         const maxDebt = getCustomerDebtLimit();
         maxDebtInput.value = maxDebt > 0 ? String(maxDebt) : '';
     }
-    if (themeInput) themeInput.value = currentTheme;
+    settings.theme = 'dark';
+    if (themeInput) themeInput.value = 'dark';
     
     setAppLanguage(language);
-    applyTheme(currentTheme);
+    applyTheme('dark');
     refreshStorageStatus();
     renderDrinkProfitEditor();
     renderStockManagement();
@@ -13276,32 +13500,45 @@ async function saveCustomerDebtSettings() {
 }
 
 function setTheme(theme) {
-    const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+    const normalizedTheme = 'dark';
     const themeInput = document.getElementById('themeMode');
     if (themeInput) themeInput.value = normalizedTheme;
     applyTheme(normalizedTheme);
 }
 
+function toggleThemeModeSwitch(isDark) {
+    setTheme('dark');
+}
+
 function applyTheme(theme) {
     const lightBtn = document.getElementById('lightThemeBtn');
     const darkBtn = document.getElementById('darkThemeBtn');
+    const themeToggle = document.getElementById('themeModeToggle');
+    const themeSwitchState = document.getElementById('settingsThemeSwitchState');
     
-    if (theme === 'dark') {
-        document.body.classList.add('dark-mode');
-    } else {
-        document.body.classList.remove('dark-mode');
-    }
+    const forcedTheme = 'dark';
+    settings.theme = forcedTheme;
+    document.body.classList.add('dark-mode');
 
     if (lightBtn) {
-        const isActive = theme !== 'dark';
+        const isActive = false;
         lightBtn.classList.toggle('is-active', isActive);
         lightBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     }
 
     if (darkBtn) {
-        const isActive = theme === 'dark';
+        const isActive = true;
         darkBtn.classList.toggle('is-active', isActive);
         darkBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    }
+
+    if (themeToggle) {
+        themeToggle.checked = true;
+        themeToggle.setAttribute('aria-checked', 'true');
+    }
+
+    if (themeSwitchState) {
+        themeSwitchState.textContent = 'Dark mode active';
     }
 }
 
@@ -13324,19 +13561,18 @@ function onLanguageChange(event) {
 
 function savePreferences() {
     const languageSelect = document.getElementById('language');
-    const currencySelect = document.getElementById('currency');
     const themeInput = document.getElementById('themeMode');
     
     const language = languageSelect ? languageSelect.value : 'en';
-    const currency = currencySelect ? currencySelect.value : 'RWF';
-    const theme = themeInput ? themeInput.value : (settings.theme || 'light');
+    const theme = 'dark';
     
-    settings.currency = currency;
-    settings.theme = theme === 'dark' ? 'dark' : 'light';
+    settings.currency = 'RWF';
+    settings.theme = 'dark';
+    if (themeInput) themeInput.value = 'dark';
     setAppLanguage(language);
-    applyTheme(settings.theme);
+    applyTheme(theme);
     optimizedSaveData();
-    showSuccessToast('Preferences saved. Theme, language, and currency updated.');
+    showSuccessToast('Preferences saved. Dark mode and language updated.');
     refreshAiAssistantInsights();
 }
 
@@ -13879,6 +14115,7 @@ window.loadSettings = loadSettings;
 window.saveProfitPercentage = saveProfitPercentage;
 window.saveDrinkProfitsFromSettings = saveDrinkProfitsFromSettings;
 window.setTheme = setTheme;
+window.toggleThemeModeSwitch = toggleThemeModeSwitch;
 window.savePreferences = savePreferences;
 window.saveCurrencyAndLanguage = saveCurrencyAndLanguage;
 window.changePinFromSettings = changePinFromSettings;
