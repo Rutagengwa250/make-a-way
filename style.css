@@ -4579,6 +4579,230 @@ body.dark-mode .maw-success-toast {
     opacity: 1;
 }
 
+/* ================= ACTIVITY LOG LAYOUT ================= */
+#app #salesHistory .activity-log-header {
+    align-items: flex-start;
+}
+
+#app #salesHistory .activity-log-count {
+    margin-top: 6px;
+    color: #607796;
+    font-size: 0.98rem;
+    font-weight: 500;
+}
+
+#app #salesHistory .activity-log-controls {
+    display: grid;
+    gap: 12px;
+}
+
+#app #salesHistory .activity-log-filter-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 180px;
+    gap: 10px;
+}
+
+#app #salesHistory .activity-log-action-select {
+    border: 1px solid rgba(37, 117, 252, 0.22);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #1f3f67;
+    padding: 10px 12px;
+    font-weight: 600;
+}
+
+#app #salesHistory .activity-log-date-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#app #salesHistory .activity-log-list {
+    margin-top: 18px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(37, 117, 252, 0.14);
+    background: rgba(255, 255, 255, 0.9);
+}
+
+#app #salesHistory .activity-log-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(37, 117, 252, 0.1);
+}
+
+#app #salesHistory .activity-log-item:last-child {
+    border-bottom: none;
+}
+
+#app #salesHistory .activity-log-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex: 0 0 auto;
+}
+
+#app #salesHistory .activity-log-icon.cash {
+    background: rgba(66, 145, 255, 0.18);
+    color: #1f63d8;
+}
+
+#app #salesHistory .activity-log-icon.credit {
+    background: rgba(255, 188, 79, 0.2);
+    color: #8a5a00;
+}
+
+#app #salesHistory .activity-log-icon.deposit {
+    background: rgba(46, 213, 115, 0.22);
+    color: #1c7a42;
+}
+
+#app #salesHistory .activity-log-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+#app #salesHistory .activity-log-title {
+    font-size: 1.02rem;
+    color: #102b4e;
+    font-weight: 700;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+#app #salesHistory .activity-log-meta {
+    display: block;
+    margin-top: 3px;
+    font-size: 0.86rem;
+    color: #5f7594;
+}
+
+#app #salesHistory .activity-log-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+#app #salesHistory .activity-log-amount {
+    font-size: 1.04rem;
+    color: #0b2650;
+    font-weight: 800;
+}
+
+#app #salesHistory .activity-log-actions {
+    display: inline-flex;
+    gap: 6px;
+}
+
+#app #salesHistory .activity-log-btn {
+    border: 1px solid rgba(37, 117, 252, 0.22);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #22518a;
+    font-size: 0.74rem;
+    font-weight: 700;
+    padding: 4px 8px;
+    line-height: 1.2;
+}
+
+#app #salesHistory .activity-log-btn.delete {
+    border-color: rgba(255, 71, 87, 0.24);
+    color: #c8384c;
+}
+
+#app #salesHistory .activity-log-empty {
+    padding: 32px 14px;
+    text-align: center;
+    color: #6b7f98;
+    font-weight: 600;
+}
+
+body.dark-mode #app #salesHistory .activity-log-count {
+    color: #9eb3d1;
+}
+
+body.dark-mode #app #salesHistory .activity-log-action-select {
+    background: rgba(16, 27, 49, 0.9);
+    border-color: rgba(110, 143, 255, 0.24);
+    color: #d2e4ff;
+}
+
+body.dark-mode #app #salesHistory .activity-log-list {
+    background: rgba(8, 18, 36, 0.72);
+    border-color: rgba(110, 143, 255, 0.18);
+}
+
+body.dark-mode #app #salesHistory .activity-log-item {
+    border-bottom-color: rgba(110, 143, 255, 0.14);
+}
+
+body.dark-mode #app #salesHistory .activity-log-icon.cash {
+    background: rgba(67, 136, 255, 0.26);
+    color: #b6d2ff;
+}
+
+body.dark-mode #app #salesHistory .activity-log-icon.credit {
+    background: rgba(216, 152, 56, 0.3);
+    color: #ffe1aa;
+}
+
+body.dark-mode #app #salesHistory .activity-log-icon.deposit {
+    background: rgba(41, 131, 84, 0.4);
+    color: #bdeccf;
+}
+
+body.dark-mode #app #salesHistory .activity-log-title {
+    color: #e7f1ff;
+}
+
+body.dark-mode #app #salesHistory .activity-log-meta {
+    color: #95adc9;
+}
+
+body.dark-mode #app #salesHistory .activity-log-amount {
+    color: #dcecff;
+}
+
+body.dark-mode #app #salesHistory .activity-log-btn {
+    background: rgba(15, 31, 57, 0.9);
+    border-color: rgba(110, 143, 255, 0.24);
+    color: #c4dcff;
+}
+
+body.dark-mode #app #salesHistory .activity-log-btn.delete {
+    border-color: rgba(248, 113, 113, 0.35);
+    color: #ffc2c2;
+}
+
+body.dark-mode #app #salesHistory .activity-log-empty {
+    color: #93aac7;
+}
+
+@media (max-width: 700px) {
+    #app #salesHistory .activity-log-filter-row {
+        grid-template-columns: 1fr;
+    }
+
+    #app #salesHistory .activity-log-item {
+        align-items: flex-start;
+    }
+
+    #app #salesHistory .activity-log-side {
+        width: 100%;
+        align-items: flex-start;
+        margin-left: 50px;
+    }
+}
+
 /* ================= HOME-STYLE UI SYSTEM (ALL TABS) ================= */
 #app .page-header h2 {
     color: #1f63d8;
