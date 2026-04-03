@@ -12319,12 +12319,20 @@ function getSalesTransactionGroupKey(sale) {
     return `legacy:${legacyDateKey}|${customerKey}|${typeKey}`;
 }
 
+function getSalesHistorySelectedType() {
+    const actionFilter = document.getElementById('salesActionFilter');
+    const selected = String(actionFilter?.value || selectedSalesHistoryType || 'all').trim().toLowerCase();
+    if (selected === 'normal' || selected === 'credit' || selected === 'deposit') return selected;
+    return 'all';
+}
+
 function getSalesHistoryFilteredSales() {
     const searchTerm = (document.getElementById('salesSearch')?.value || '').trim().toLowerCase();
     const selectedDate = document.getElementById('salesHistoryDate')?.value || '';
+    const selectedType = getSalesHistorySelectedType();
 
     return sales.filter((sale) => {
-        if (selectedSalesHistoryType !== 'all' && sale.type !== selectedSalesHistoryType) return false;
+        if (selectedType !== 'all' && sale.type !== selectedType) return false;
 
         if (selectedDate) {
             const { dayStart, dayEnd } = getDayRange(selectedDate);
@@ -12342,7 +12350,121 @@ function getSalesHistoryFilteredSales() {
     });
 }
 
-function renderSalesHistoryRows(filteredSales) {
+function getSalesHistoryActivityData(filteredSales = null) {
+    const rows = Array.isArray(filteredSales) ? filteredSales : getSalesHistoryFilteredSales();
+    const selectedType = getSalesHistorySelectedType();
+    const searchTerm = (document.getElementById('salesSearch')?.value || '').trim().toLowerCase();
+    const selectedDate = document.getElementById('salesHistoryDate')?.value || '';
+
+    const transactions = {};
+    const sortedSales = [...rows].sort((a, b) => new Date(b.date) - new Date(a.date));
+    sortedSales.forEach((sale) => {
+        const timeKey = getSalesTransactionGroupKey(sale);
+        if (!transactions[timeKey]) {
+            transactions[timeKey] = {
+                date: sale.date,
+                customerId: sale.customerId,
+                type: sale.type,
+                items: [],
+                totalAmount: 0,
+                ids: []
+            };
+        }
+        transactions[timeKey].items.push(sale);
+        transactions[timeKey].totalAmount += (sale.total || 0);
+        if (sale.id) transactions[timeKey].ids.push(sale.id);
+    });
+
+    const transactionList = Object.values(transactions).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const salesActivityEntries = transactionList.map((transaction) => {
+        const saleDate = new Date(transaction.date);
+        const customerName = getCustomerNameByReference(transaction.customerId, 'Guest');
+        const itemsText = transaction.items.length > 1 ? `${transaction.items.length} items` : (transaction.items[0]?.drinkName || 'Unknown');
+        const totalQty = transaction.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        const idsArray = transaction.ids.length > 0 ? transaction.ids : transaction.items.map((item) => item.id).filter((id) => id);
+        const encodedItems = JSON.stringify(transaction.items).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+        return {
+            kind: 'sale',
+            actionLabel: transaction.type === 'credit' ? 'Credit Sale' : 'Cash Sale',
+            type: transaction.type,
+            date: transaction.date,
+            totalQty,
+            customerName,
+            itemsText,
+            saleTypeDisplay: transaction.type === 'credit'
+                ? '<span style="background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px;">Credit</span>'
+                : '<span style="background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px;">Cash</span>',
+            totalAmount: transaction.totalAmount,
+            amount: transaction.totalAmount,
+            firstUnitPrice: transaction.items.length > 0 ? Number(transaction.items[0].price || 0) : 0,
+            idsArray,
+            encodedItems,
+            title: transaction.type === 'credit'
+                ? `Credit sale to ${customerName} - ${itemsText} for RWF ${transaction.totalAmount.toLocaleString()}`
+                : `Sold ${totalQty}x ${itemsText} for RWF ${transaction.totalAmount.toLocaleString()}`,
+            meta: `${saleDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })} | ${saleDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
+            iconClass: transaction.type === 'credit' ? 'credit' : 'cash',
+            iconSymbol: transaction.type === 'credit' ? '&#128179;' : '&#128722;'
+        };
+    });
+
+    const depositEntries = (Array.isArray(clates) ? clates : [])
+        .filter((entry) => {
+            if (!entry) return false;
+            if (selectedType !== 'all' && selectedType !== 'deposit') return false;
+
+            const depositDate = new Date(entry.date || entry.createdAt || Date.now());
+            if (Number.isNaN(depositDate.getTime())) return false;
+
+            if (selectedDate) {
+                const { dayStart, dayEnd } = getDayRange(selectedDate);
+                if (!(depositDate >= dayStart && depositDate < dayEnd)) return false;
+            }
+
+            if (!searchTerm) return true;
+            const amountText = Number(entry.amount || 0).toLocaleString();
+            const haystack = [
+                entry.customerName,
+                entry.description,
+                entry.returned ? 'returned' : 'pending',
+                amountText,
+                depositDate.toLocaleDateString()
+            ].join(' ').toLowerCase();
+            return haystack.includes(searchTerm);
+        })
+        .map((entry) => {
+            const amount = Number(entry.amount || 0);
+            const depositDate = new Date(entry.date || entry.createdAt || Date.now());
+            const customerName = String(entry.customerName || 'Customer');
+            const statusLabel = entry.returned ? 'Returned' : 'Pending';
+            const description = String(entry.description || '').trim();
+
+            return {
+                kind: 'deposit',
+                actionLabel: entry.returned ? 'Deposit Returned' : 'Deposit',
+                date: depositDate.toISOString(),
+                amount,
+                customerName,
+                statusLabel,
+                description,
+                title: entry.returned
+                    ? `${customerName} marked deposit returned (RWF ${amount.toLocaleString()})`
+                    : `${customerName} deposited RWF ${amount.toLocaleString()}`,
+                meta: `${depositDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })} | ${depositDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${description ? ` | ${description}` : ''}`,
+                iconClass: 'deposit',
+                iconSymbol: '&#128101;'
+            };
+        });
+
+    const allActivityEntries = [...salesActivityEntries, ...depositEntries]
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return { transactionList, allActivityEntries };
+}
+
+function renderSalesHistoryRowsLegacy(filteredSales) {
     const tbody = document.getElementById('salesHistoryBody');
     if (!tbody) return;
     clearElement(tbody);
@@ -12402,7 +12524,183 @@ function renderSalesHistoryRows(filteredSales) {
     });
 }
 
+function renderSalesHistoryRows(filteredSales) {
+    const rows = Array.isArray(filteredSales) ? filteredSales : [];
+    const tbody = document.getElementById('salesHistoryBody');
+    const list = document.getElementById('activityLogList');
+    const countLabel = document.getElementById('salesHistoryCountLabel');
+    const selectedType = getSalesHistorySelectedType();
+    const searchTerm = (document.getElementById('salesSearch')?.value || '').trim().toLowerCase();
+    const selectedDate = document.getElementById('salesHistoryDate')?.value || '';
+
+    if (tbody) clearElement(tbody);
+    if (list) clearElement(list);
+
+    const transactions = {};
+    const sortedSales = [...rows].sort((a, b) => new Date(b.date) - new Date(a.date));
+    sortedSales.forEach((sale) => {
+        const timeKey = getSalesTransactionGroupKey(sale);
+        if (!transactions[timeKey]) {
+            transactions[timeKey] = {
+                date: sale.date,
+                customerId: sale.customerId,
+                type: sale.type,
+                items: [],
+                totalAmount: 0,
+                ids: []
+            };
+        }
+        transactions[timeKey].items.push(sale);
+        transactions[timeKey].totalAmount += (sale.total || 0);
+        if (sale.id) transactions[timeKey].ids.push(sale.id);
+    });
+
+    const transactionList = Object.values(transactions).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const depositEntries = (Array.isArray(clates) ? clates : [])
+        .filter((entry) => {
+            if (!entry) return false;
+            if (selectedType !== 'all' && selectedType !== 'deposit') return false;
+
+            const depositDate = new Date(entry.date || entry.createdAt || Date.now());
+            if (Number.isNaN(depositDate.getTime())) return false;
+
+            if (selectedDate) {
+                const { dayStart, dayEnd } = getDayRange(selectedDate);
+                if (!(depositDate >= dayStart && depositDate < dayEnd)) return false;
+            }
+
+            if (!searchTerm) return true;
+            const haystack = [
+                entry.customerName,
+                entry.description,
+                entry.returned ? 'returned' : 'pending',
+                depositDate.toLocaleDateString()
+            ].join(' ').toLowerCase();
+            return haystack.includes(searchTerm);
+        })
+        .map((entry) => {
+            const amount = Number(entry.amount || 0);
+            const depositDate = new Date(entry.date || entry.createdAt || Date.now());
+            return {
+                kind: 'deposit',
+                date: depositDate.toISOString(),
+                amount,
+                title: `${entry.customerName || 'Customer'} deposited RWF ${amount.toLocaleString()}`,
+                meta: `${depositDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })} | ${depositDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
+                iconClass: 'deposit',
+                iconSymbol: '&#128101;'
+            };
+        });
+
+    const salesActivityEntries = transactionList.map((transaction) => {
+        const saleDate = new Date(transaction.date);
+        const customerName = getCustomerNameByReference(transaction.customerId, 'Guest');
+        const itemsText = transaction.items.length > 1 ? `${transaction.items.length} items` : (transaction.items[0]?.drinkName || 'Unknown');
+        const totalQty = transaction.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        const idsArray = transaction.ids.length > 0 ? transaction.ids : transaction.items.map((item) => item.id).filter((id) => id);
+        const encodedItems = JSON.stringify(transaction.items).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        return {
+            kind: 'sale',
+            date: transaction.date,
+            totalQty,
+            customerName,
+            itemsText,
+            saleTypeDisplay: transaction.type === 'credit'
+                ? '<span style="background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px;">Credit</span>'
+                : '<span style="background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px;">Cash</span>',
+            totalAmount: transaction.totalAmount,
+            firstUnitPrice: transaction.items.length > 0 ? Number(transaction.items[0].price || 0) : 0,
+            idsArray,
+            encodedItems,
+            title: transaction.type === 'credit'
+                ? `Credit sale to ${customerName} - ${itemsText} for RWF ${transaction.totalAmount.toLocaleString()}`
+                : `Sold ${totalQty}x ${itemsText} for RWF ${transaction.totalAmount.toLocaleString()}`,
+            meta: `${saleDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })} | ${saleDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
+            iconClass: transaction.type === 'credit' ? 'credit' : 'cash',
+            iconSymbol: transaction.type === 'credit' ? '&#128179;' : '&#128722;'
+        };
+    });
+
+    const allActivityEntries = [...salesActivityEntries, ...depositEntries]
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const activityCount = allActivityEntries.length;
+    if (countLabel) {
+        countLabel.textContent = `${activityCount} recorded activit${activityCount === 1 ? 'y' : 'ies'}`;
+    }
+
+    if (activityCount === 0) {
+        if (list) list.innerHTML = '<div class="activity-log-empty">No activity found</div>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="padding: 40px; text-align: center; color: #999;">No sales found</td></tr>';
+        return;
+    }
+
+    if (list) {
+        allActivityEntries.forEach((entry) => {
+            const amount = Number(entry.totalAmount ?? entry.amount ?? 0);
+            const actionsHtml = entry.kind === 'sale'
+                ? `
+                    <button class="activity-log-btn" type="button" onclick="showTransactionDetails('${entry.encodedItems}')">Details</button>
+                    ${entry.idsArray.length > 0 ? `<button class="activity-log-btn delete" type="button" onclick="deleteTransaction([${entry.idsArray.join(',')}])">Delete</button>` : ''}
+                `
+                : '';
+            const activityItem = document.createElement('div');
+            activityItem.className = 'activity-log-item';
+            activityItem.innerHTML = `
+                <span class="activity-log-icon ${entry.iconClass}" aria-hidden="true">${entry.iconSymbol}</span>
+                <div class="activity-log-main">
+                    <div class="activity-log-title">${escapeHtml(entry.title)}</div>
+                    <span class="activity-log-meta">${escapeHtml(entry.meta)}</span>
+                </div>
+                <div class="activity-log-side">
+                    <strong class="activity-log-amount">RWF ${amount.toLocaleString()}</strong>
+                    <div class="activity-log-actions">${actionsHtml}</div>
+                </div>
+            `;
+            list.appendChild(activityItem);
+        });
+    }
+
+    if (tbody) {
+        transactionList.forEach((transaction) => {
+            const saleDate = new Date(transaction.date);
+            const dateStr = saleDate.toLocaleDateString() + ' ' + saleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const customerName = getCustomerNameByReference(transaction.customerId, 'Guest');
+            const saleTypeDisplay = transaction.type === 'credit'
+                ? '<span style="background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px;">Credit</span>'
+                : '<span style="background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px;">Cash</span>';
+            const itemsText = transaction.items.length > 1 ? `${transaction.items.length} items` : (transaction.items[0]?.drinkName || 'Unknown');
+            const totalQty = transaction.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+            const idsArray = transaction.ids.length > 0 ? transaction.ids : transaction.items.map((item) => item.id).filter((id) => id);
+            const encodedItems = JSON.stringify(transaction.items).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            const detailsButton = `<button onclick="showTransactionDetails('${encodedItems}')" style="padding: 6px 12px; background: #2575fc; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; margin-right: 8px;">Details</button>`;
+            const deleteButton = idsArray.length > 0
+                ? `<button onclick="deleteTransaction([${idsArray.join(',')}])" style="padding: 6px 10px; font-size: 12px; margin: 2px; background: #ff6b6b; color: white; border: none; border-radius: 4px; cursor: pointer;">Delete</button>`
+                : '';
+
+            const row = document.createElement('tr');
+            row.style.borderBottom = '1px solid #e1e5e9';
+            row.innerHTML = `
+                <td style="padding: 15px;">${dateStr}</td>
+                <td style="padding: 15px;"><strong>${escapeHtml(itemsText)}</strong></td>
+                <td style="padding: 15px; text-align: center;">${totalQty}</td>
+                <td style="padding: 15px; text-align: right;">RWF ${transaction.items.length > 0 ? (transaction.items[0].price || 0).toLocaleString() : '0'}</td>
+                <td style="padding: 15px; text-align: right; font-weight: 600; color: #2575fc;">RWF ${transaction.totalAmount.toLocaleString()}</td>
+                <td style="padding: 15px; text-align: center;">${saleTypeDisplay}</td>
+                <td style="padding: 15px; text-align: center;">${escapeHtml(customerName)}</td>
+                <td style="padding: 15px; text-align: center;">${detailsButton}${deleteButton}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+}
+
 function applySalesHistoryFilters() {
+    const actionFilter = document.getElementById('salesActionFilter');
+    if (actionFilter) {
+        selectedSalesHistoryType = getSalesHistorySelectedType();
+    }
     renderSalesHistoryRows(getSalesHistoryFilteredSales());
 }
 
@@ -12611,6 +12909,10 @@ function showTransactionDetails(itemsJson) {
 
 function filterSalesByType(type, event) {
     selectedSalesHistoryType = type || 'all';
+    const actionFilter = document.getElementById('salesActionFilter');
+    if (actionFilter) {
+        actionFilter.value = selectedSalesHistoryType;
+    }
 
     // Add active state to sales-history filter buttons only
     const filterButtons = document.querySelectorAll('#salesHistory .filter-buttons .filter-btn');
@@ -13794,6 +14096,13 @@ function updateLanguageUI() {
     // Sales history page
     setText('#salesHistory button[onclick="exportSalesHistoryPDF()"]', t('exportPdf'));
     setPlaceholder('#salesSearch', t('searchSales'));
+    const salesActionFilter = document.getElementById('salesActionFilter');
+    if (salesActionFilter) {
+        if (salesActionFilter.options[0]) salesActionFilter.options[0].textContent = 'All Actions';
+        if (salesActionFilter.options[1]) salesActionFilter.options[1].textContent = t('cash');
+        if (salesActionFilter.options[2]) salesActionFilter.options[2].textContent = t('creditSale');
+        if (salesActionFilter.options[3]) salesActionFilter.options[3].textContent = 'Deposits';
+    }
     const saleTypeFilterBtns = document.querySelectorAll('#salesHistory .filter-buttons .filter-btn');
     if (saleTypeFilterBtns[0]) saleTypeFilterBtns[0].textContent = t('all');
     if (saleTypeFilterBtns[1]) saleTypeFilterBtns[1].textContent = t('cash');
